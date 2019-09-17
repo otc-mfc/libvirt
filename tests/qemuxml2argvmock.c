@@ -184,6 +184,15 @@ virNetDevRunEthernetScript(const char *ifname ATTRIBUTE_UNUSED,
     return 0;
 }
 
+char *
+virHostGetDRMRenderNode(void)
+{
+    char *dst = NULL;
+
+    ignore_value(VIR_STRDUP(dst, "/dev/dri/foo"));
+    return dst;
+}
+
 void
 virCommandPassFD(virCommandPtr cmd ATTRIBUTE_UNUSED,
                  int fd ATTRIBUTE_UNUSED,

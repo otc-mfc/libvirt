@@ -924,6 +924,8 @@ B<Explanation of fields>:
   usable            - The amount of memory which can be reclaimed by balloon
 without causing host swapping (in KiB)
   last-update       - Timestamp of the last update of statistics (in seconds)
+  disk_caches       - The amount of memory that can be reclaimed without
+additional I/O, typically disk caches (in KiB)
 
 For QEMU/KVM with a memory balloon, setting the optional I<--period> to a
 value larger than 0 in seconds will allow the balloon driver to return
@@ -1030,6 +1032,9 @@ I<--balloon> returns:
                     balloon without causing host swapping (in KiB)
  "balloon.last-update" - timestamp of the last update of statistics
                          (in seconds)
+ "balloon.disk_caches " - the amount of memory that can be reclaimed
+                          without additional I/O, typically disk
+                          caches (in KiB)
 
 I<--vcpu> returns:
 
@@ -3183,6 +3188,16 @@ or attempting to detach a device that is not present in the domain XML,
 but shares some specific attributes with one that is present,
 may lead to unexpected results.
 
+B<Quirk>: Device unplug is asynchronous in most cases and requires guest
+cooperation. This means that it's up to the discretion of the guest to disallow
+or delay the unplug arbitrarily. As the libvirt API used in this command was
+designed as synchronous it returns success after some timeout even if the device
+was not unplugged yet to allow further interactions with the domain e.g. if the
+guest is unresponsive. Callers which need to make sure that the
+device was unplugged can use libvirt events (see virsh event) to be notified
+when the device is removed. Note that the event may arrive before the command
+returns.
+
 If I<--live> is specified, affect a running domain.
 If I<--config> is specified, affect the next startup of a persistent domain.
 If I<--current> is specified, affect the current domain state.
@@ -3197,9 +3212,12 @@ Note that older versions of virsh used I<--config> as an alias for
 I<--persistent>.
 
 =item B<detach-device-alias> I<domain> I<alias>
-[[[I<--live>] [I<--config>] | [I<--current>]] | [I<--persistent>]]
+[[[I<--live>] [I<--config>] | [I<--current>]]]]
 
-Detach a device with given I<alias> from the I<domain>.
+Detach a device with given I<alias> from the I<domain>. This command returns
+successfully after the unplug request was sent to the hypervisor. The actual
+removal of the device is notified asynchronously via libvirt events
+(see virsh event).
 
 If I<--live> is specified, affect a running domain.
 If I<--config> is specified, affect the next startup of a persistent domain.
@@ -3230,6 +3248,8 @@ I<--persistent>.
 If B<--print-xml> is specified, then the XML which would be used to detach the
 disk is printed instead.
 
+Please see documentation for B<detach-device> for known quirks.
+
 =item B<detach-interface> I<domain> I<type> [I<--mac mac>]
 [[[I<--live>] [I<--config>] | [I<--current>]] | [I<--persistent>]]
 
@@ -3251,6 +3271,8 @@ an offline domain, and like I<--live> I<--config> for a running domain.
 
 Note that older versions of virsh used I<--config> as an alias for
 I<--persistent>.
+
+Please see documentation for B<detach-device> for known quirks.
 
 =item B<update-device> I<domain> I<file> [I<--force>]
 [[[I<--live>] [I<--config>] | [I<--current>]] | [I<--persistent>]]
@@ -3821,8 +3843,11 @@ just I<--build> is provided, then B<pool-build> is called with no flags.
 [I<--source-name name>] [I<--target path>] [I<--source-format format>]
 [I<--auth-type authtype> I<--auth-username username>
 [I<--secret-usage usage> | I<--secret-uuid uuid>]]
+[I<--source-protocol-ver ver>]
 [[I<--adapter-name name>] | [I<--adapter-wwnn> wwnn I<--adapter-wwpn> wwpn]
-[I<--adapter-parent parent>]]
+[I<--adapter-parent parent> |
+ I<--adapter-parent-wwnn parent_wwnn> I<adapter-parent-wwpn parent_wwpn> |
+ I<--adapter-parent-fabric-wwn parent_fabric_wwn>]]
 [I<--build>] [[I<--overwrite>] | [I<--no-overwrite>]] [I<--print-xml>]
 
 
@@ -3860,6 +3885,10 @@ provides the elements required to generate authentication credentials for
 the storage pool. The I<authtype> is either chap for iscsi I<type> pools or
 ceph for rbd I<type> pools. Either the secret I<usage> or I<uuid> value may
 be provided, but not both.
+
+[I<--source-protocol-ver ver>] provides the NFS protocol version number used
+to contact the server's NFS service via nfs mount option 'nfsvers=n'. It is
+expect the I<ver> value is an unsigned integer.
 
 [I<--adapter-name name>] defines the scsi_hostN adapter name to be used for
 the scsi_host adapter type pool.
@@ -4825,13 +4854,23 @@ of the network filters directly.
 =item B<nwfilter-binding-create> I<xmlfile>
 
 Associate a network port with a network filter. The network filter backend
-will immediately attempt to instantiate the filter rules on the port.
+will immediately attempt to instantiate the filter rules on the port. This
+command may be used to associate a filter with a currently running guest
+that does not have a filter defined for a specific network port. Since the
+bindings are generally automatically managed by the hypervisor, using this
+command to define a filter for a network port and then starting the guest
+afterwards may prevent the guest from starting if it attempts to use the
+network port and finds a filter already defined.
 
-=item B<nwfilter-binding-undefine> I<port-name>
+=item B<nwfilter-binding-delete> I<port-name>
 
 Disassociate a network port from a network filter. The network filter
 backend will immediately tear down the filter rules that exist on the
-port.
+port. This command may be used to remove the network port binding for
+a filter currently in use for the guest while the guest is running
+without needing to restart the guest. Restoring the network port binding
+filter for the running guest would be accomplished by using
+I<nwfilter-binding-create>.
 
 =item B<nwfilter-binding-list>
 

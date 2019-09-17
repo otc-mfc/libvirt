@@ -163,6 +163,7 @@ mymain(void)
             ret = -1; \
     } while (0)
 
+    /* Keep this in sync with qemucaps2xmltest */
     DO_TEST("x86_64", "caps_1.5.3");
     DO_TEST("x86_64", "caps_1.6.0");
     DO_TEST("x86_64", "caps_1.7.0");
@@ -174,7 +175,10 @@ mymain(void)
     DO_TEST("x86_64", "caps_2.8.0");
     DO_TEST("x86_64", "caps_2.9.0");
     DO_TEST("x86_64", "caps_2.10.0");
+    DO_TEST("x86_64", "caps_2.11.0");
     DO_TEST("x86_64", "caps_2.12.0");
+    DO_TEST("x86_64", "caps_3.0.0");
+    DO_TEST("x86_64", "caps_3.1.0");
     DO_TEST("aarch64", "caps_2.6.0");
     DO_TEST("aarch64", "caps_2.10.0");
     DO_TEST("aarch64", "caps_2.12.0");

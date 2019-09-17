@@ -363,6 +363,10 @@ struct _qemuDomainObjPrivate {
 
     /* true if qemu-pr-helper process is running for the domain */
     bool prDaemonRunning;
+
+    /* qemuProcessStartCPUs stores the reason for starting vCPUs here for the
+     * RESUME event handler to use it */
+    virDomainRunningReason runningReason;
 };
 
 # define QEMU_DOMAIN_PRIVATE(vm) \
@@ -477,6 +481,7 @@ typedef enum {
     QEMU_PROCESS_EVENT_SERIAL_CHANGED,
     QEMU_PROCESS_EVENT_BLOCK_JOB,
     QEMU_PROCESS_EVENT_MONITOR_EOF,
+    QEMU_PROCESS_EVENT_PR_DISCONNECT,
 
     QEMU_PROCESS_EVENT_LAST
 } qemuProcessEventType;
@@ -589,15 +594,18 @@ int qemuDomainObjExitRemote(virDomainObjPtr obj,
     ATTRIBUTE_NONNULL(1) ATTRIBUTE_RETURN_CHECK;
 
 virDomainDefPtr qemuDomainDefCopy(virQEMUDriverPtr driver,
+                                  virQEMUCapsPtr qemuCaps,
                                   virDomainDefPtr src,
                                   unsigned int flags);
 
 int qemuDomainDefFormatBuf(virQEMUDriverPtr driver,
+                           virQEMUCapsPtr qemuCaps,
                            virDomainDefPtr vm,
                            unsigned int flags,
                            virBuffer *buf);
 
 char *qemuDomainDefFormatXML(virQEMUDriverPtr driver,
+                             virQEMUCapsPtr qemuCaps,
                              virDomainDefPtr vm,
                              unsigned int flags);
 
@@ -606,6 +614,7 @@ char *qemuDomainFormatXML(virQEMUDriverPtr driver,
                           unsigned int flags);
 
 char *qemuDomainDefFormatLive(virQEMUDriverPtr driver,
+                              virQEMUCapsPtr qemuCaps,
                               virDomainDefPtr def,
                               virCPUDefPtr origCPU,
                               bool inactive,
@@ -764,6 +773,7 @@ int qemuDomainUpdateMemoryDeviceInfo(virQEMUDriverPtr driver,
                                      int asyncJob);
 
 bool qemuDomainDefCheckABIStability(virQEMUDriverPtr driver,
+                                    virQEMUCapsPtr qemuCaps,
                                     virDomainDefPtr src,
                                     virDomainDefPtr dst);
 
@@ -1060,5 +1070,8 @@ qemuDomainDiskCachemodeFlags(int cachemode,
                              bool *noflush);
 
 char * qemuDomainGetManagedPRSocketPath(qemuDomainObjPrivatePtr priv);
+
+virDomainEventResumedDetailType
+qemuDomainRunningReasonToResumeEvent(virDomainRunningReason reason);
 
 #endif /* __QEMU_DOMAIN_H__ */

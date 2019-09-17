@@ -1366,7 +1366,8 @@ int virStorageFileIsClusterFS(const char *path)
      */
     return virFileIsSharedFSType(path,
                                  VIR_FILE_SHFS_GFS2 |
-                                 VIR_FILE_SHFS_OCFS);
+                                 VIR_FILE_SHFS_OCFS |
+                                 VIR_FILE_SHFS_CEPH);
 }
 
 #ifdef LVS
@@ -1434,8 +1435,24 @@ int virStorageFileGetLVMKey(const char *path,
 #endif
 
 #ifdef WITH_UDEV
-int virStorageFileGetSCSIKey(const char *path,
-                             char **key)
+/* virStorageFileGetSCSIKey
+ * @path: Path to the SCSI device
+ * @key: Unique key to be returned
+ * @ignoreError: Used to not report ENOSYS
+ *
+ * Using a udev specific function, query the @path to get and return a
+ * unique @key for the caller to use.
+ *
+ * Returns:
+ *     0 On success, with the @key filled in or @key=NULL if the
+ *       returned string was empty.
+ *    -1 When WITH_UDEV is undefined and a system error is reported
+ *    -2 When WITH_UDEV is defined, but calling virCommandRun fails
+ */
+int
+virStorageFileGetSCSIKey(const char *path,
+                         char **key,
+                         bool ignoreError ATTRIBUTE_UNUSED)
 {
     int status;
     virCommandPtr cmd = virCommandNewArgList(
@@ -1445,7 +1462,7 @@ int virStorageFileGetSCSIKey(const char *path,
         "--device", path,
         NULL
         );
-    int ret = -1;
+    int ret = -2;
 
     *key = NULL;
 
@@ -1476,13 +1493,95 @@ int virStorageFileGetSCSIKey(const char *path,
 }
 #else
 int virStorageFileGetSCSIKey(const char *path,
-                             char **key ATTRIBUTE_UNUSED)
+                             char **key ATTRIBUTE_UNUSED,
+                             bool ignoreError)
 {
-    virReportSystemError(ENOSYS, _("Unable to get SCSI key for %s"), path);
+    if (!ignoreError)
+        virReportSystemError(ENOSYS, _("Unable to get SCSI key for %s"), path);
     return -1;
 }
 #endif
 
+
+#ifdef WITH_UDEV
+/* virStorageFileGetNPIVKey
+ * @path: Path to the NPIV device
+ * @key: Unique key to be returned
+ *
+ * Using a udev specific function, query the @path to get and return a
+ * unique @key for the caller to use. Unlike the GetSCSIKey method, an
+ * NPIV LUN is uniquely identified by its ID_TARGET_PORT value.
+ *
+ * Returns:
+ *     0 On success, with the @key filled in or @key=NULL if the
+ *       returned output string didn't have the data we need to
+ *       formulate a unique key value
+ *    -1 When WITH_UDEV is undefined and a system error is reported
+ *    -2 When WITH_UDEV is defined, but calling virCommandRun fails
+ */
+# define ID_SERIAL "ID_SERIAL="
+# define ID_TARGET_PORT "ID_TARGET_PORT="
+int
+virStorageFileGetNPIVKey(const char *path,
+                         char **key)
+{
+    int status;
+    char *outbuf = NULL;
+    const char *serial;
+    const char *port;
+    virCommandPtr cmd = virCommandNewArgList("/lib/udev/scsi_id",
+                                             "--replace-whitespace",
+                                             "--whitelisted",
+                                             "--export",
+                                             "--device", path,
+                                             NULL
+                                             );
+    int ret = -2;
+
+    *key = NULL;
+
+    /* Run the program and capture its output */
+    virCommandSetOutputBuffer(cmd, &outbuf);
+    if (virCommandRun(cmd, &status) < 0)
+        goto cleanup;
+
+    /* Explicitly check status == 0, rather than passing NULL
+     * to virCommandRun because we don't want to raise an actual
+     * error in this scenario, just return a NULL key.
+     */
+    if (status == 0 && *outbuf &&
+        (serial = strstr(outbuf, ID_SERIAL)) &&
+        (port = strstr(outbuf, ID_TARGET_PORT))) {
+        char *tmp;
+
+        serial += strlen(ID_SERIAL);
+        port += strlen(ID_TARGET_PORT);
+
+        if ((tmp = strchr(serial, '\n')))
+            *tmp = '\0';
+
+        if ((tmp = strchr(port, '\n')))
+            *tmp = '\0';
+
+        if (*serial != '\0' && *port != '\0')
+            ignore_value(virAsprintf(key, "%s_PORT%s", serial, port));
+    }
+
+    ret = 0;
+
+ cleanup:
+    virCommandFree(cmd);
+    VIR_FREE(outbuf);
+
+    return ret;
+}
+#else
+int virStorageFileGetNPIVKey(const char *path,
+                             char **key ATTRIBUTE_UNUSED)
+{
+    return -1;
+}
+#endif
 
 /**
  * virStorageFileParseBackingStoreStr:
@@ -1982,11 +2081,13 @@ virStoragePRDefParseXML(xmlXPathContextPtr ctxt)
 
 void
 virStoragePRDefFormat(virBufferPtr buf,
-                      virStoragePRDefPtr prd)
+                      virStoragePRDefPtr prd,
+                      bool migratable)
 {
     virBufferAsprintf(buf, "<reservations managed='%s'",
                       virTristateBoolTypeToString(prd->managed));
-    if (prd->path) {
+    if (prd->path &&
+        (prd->managed == VIR_TRISTATE_BOOL_NO || !migratable)) {
         virBufferAddLit(buf, ">\n");
         virBufferAdjustIndent(buf, 2);
         virBufferAddLit(buf, "<source type='unix'");

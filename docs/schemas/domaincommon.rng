@@ -983,6 +983,23 @@
             </oneOrMore>
           </element>
         </zeroOrMore>
+        <zeroOrMore>
+          <element name="memorytune">
+            <attribute name="vcpus">
+              <ref name='cpuset'/>
+            </attribute>
+            <oneOrMore>
+              <element name="node">
+                <attribute name="id">
+                  <ref name='unsignedInt'/>
+                </attribute>
+                <attribute name="bandwidth">
+                  <ref name='unsignedInt'/>
+                </attribute>
+              </element>
+            </oneOrMore>
+          </element>
+        </zeroOrMore>
       </interleave>
     </element>
   </define>
@@ -3366,6 +3383,20 @@
             </attribute>
           </optional>
         </group>
+        <group>
+          <attribute name="type">
+            <value>egl-headless</value>
+          </attribute>
+          <optional>
+            <element name="gl">
+              <optional>
+                <attribute name="rendernode">
+                  <ref name="absFilePath"/>
+                </attribute>
+              </optional>
+            </element>
+          </optional>
+        </group>
       </choice>
     </element>
   </define>
@@ -3451,6 +3482,7 @@
                 <value>vbox</value>
                 <value>virtio</value>
                 <value>gop</value>
+                <value>none</value>
               </choice>
             </attribute>
             <group>
@@ -4234,6 +4266,9 @@
         <optional>
           <ref name="address"/>
         </optional>
+        <optional>
+          <ref name="alias"/>
+        </optional>
       </interleave>
     </element>
   </define>
@@ -4573,6 +4608,11 @@
         <value>vfio-ccw</value>
       </choice>
     </attribute>
+    <optional>
+      <attribute name="display">
+        <ref name="virOnOff"/>
+      </attribute>
+    </optional>
     <element name="source">
       <ref name="mdevaddress"/>
     </element>
@@ -4906,6 +4946,11 @@
           </optional>
           <optional>
             <ref name="vmcoreinfo"/>
+          </optional>
+          <optional>
+            <element name="htm">
+              <ref name="featurestate"/>
+            </element>
           </optional>
         </interleave>
       </element>

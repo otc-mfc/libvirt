@@ -777,6 +777,7 @@ qemuMigrationCookieCapsXMLFormat(virBufferPtr buf,
 
 static int
 qemuMigrationCookieXMLFormat(virQEMUDriverPtr driver,
+                             virQEMUCapsPtr qemuCaps,
                              virBufferPtr buf,
                              qemuMigrationCookiePtr mig)
 {
@@ -818,6 +819,7 @@ qemuMigrationCookieXMLFormat(virQEMUDriverPtr driver,
     if ((mig->flags & QEMU_MIGRATION_COOKIE_PERSISTENT) &&
         mig->persistent) {
         if (qemuDomainDefFormatBuf(driver,
+                                   qemuCaps,
                                    mig->persistent,
                                    VIR_DOMAIN_XML_INACTIVE |
                                    VIR_DOMAIN_XML_SECURE |
@@ -869,11 +871,12 @@ qemuMigrationCookieXMLFormat(virQEMUDriverPtr driver,
 
 static char *
 qemuMigrationCookieXMLFormatStr(virQEMUDriverPtr driver,
+                                virQEMUCapsPtr qemuCaps,
                                 qemuMigrationCookiePtr mig)
 {
     virBuffer buf = VIR_BUFFER_INITIALIZER;
 
-    if (qemuMigrationCookieXMLFormat(driver, &buf, mig) < 0) {
+    if (qemuMigrationCookieXMLFormat(driver, qemuCaps, &buf, mig) < 0) {
         virBufferFreeAndReset(&buf);
         return NULL;
     }
@@ -1191,6 +1194,7 @@ qemuMigrationCookieCapsXMLParse(xmlXPathContextPtr ctxt)
 static int
 qemuMigrationCookieXMLParse(qemuMigrationCookiePtr mig,
                             virQEMUDriverPtr driver,
+                            virQEMUCapsPtr qemuCaps,
                             xmlDocPtr doc,
                             xmlXPathContextPtr ctxt,
                             unsigned int flags)
@@ -1332,7 +1336,7 @@ qemuMigrationCookieXMLParse(qemuMigrationCookiePtr mig,
             goto error;
         }
         mig->persistent = virDomainDefParseNode(doc, nodes[0],
-                                                caps, driver->xmlopt, NULL,
+                                                caps, driver->xmlopt, qemuCaps,
                                                 VIR_DOMAIN_DEF_PARSE_INACTIVE |
                                                 VIR_DOMAIN_DEF_PARSE_ABI_UPDATE_MIGRATION |
                                                 VIR_DOMAIN_DEF_PARSE_SKIP_VALIDATE);
@@ -1385,6 +1389,7 @@ qemuMigrationCookieXMLParse(qemuMigrationCookiePtr mig,
 static int
 qemuMigrationCookieXMLParseStr(qemuMigrationCookiePtr mig,
                                virQEMUDriverPtr driver,
+                               virQEMUCapsPtr qemuCaps,
                                const char *xml,
                                unsigned int flags)
 {
@@ -1397,7 +1402,7 @@ qemuMigrationCookieXMLParseStr(qemuMigrationCookiePtr mig,
     if (!(doc = virXMLParseStringCtxt(xml, _("(qemu_migration_cookie)"), &ctxt)))
         goto cleanup;
 
-    ret = qemuMigrationCookieXMLParse(mig, driver, doc, ctxt, flags);
+    ret = qemuMigrationCookieXMLParse(mig, driver, qemuCaps, doc, ctxt, flags);
 
  cleanup:
     xmlXPathFreeContext(ctxt);
@@ -1416,6 +1421,8 @@ qemuMigrationBakeCookie(qemuMigrationCookiePtr mig,
                         int *cookieoutlen,
                         unsigned int flags)
 {
+    qemuDomainObjPrivatePtr priv = dom->privateData;
+
     if (!cookieout || !cookieoutlen)
         return 0;
 
@@ -1459,7 +1466,7 @@ qemuMigrationBakeCookie(qemuMigrationCookiePtr mig,
         qemuMigrationCookieAddCaps(mig, dom, party) < 0)
         return -1;
 
-    if (!(*cookieout = qemuMigrationCookieXMLFormatStr(driver, mig)))
+    if (!(*cookieout = qemuMigrationCookieXMLFormatStr(driver, priv->qemuCaps, mig)))
         return -1;
 
     *cookieoutlen = strlen(*cookieout) + 1;
@@ -1496,6 +1503,7 @@ qemuMigrationEatCookie(virQEMUDriverPtr driver,
     if (cookiein && cookieinlen &&
         qemuMigrationCookieXMLParseStr(mig,
                                        driver,
+                                       priv ? priv->qemuCaps : NULL,
                                        cookiein,
                                        flags) < 0)
         goto error;

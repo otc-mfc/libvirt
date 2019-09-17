@@ -64,6 +64,7 @@
 VIR_LOG_INIT("util.hostcpu");
 
 #define KVM_DEVICE "/dev/kvm"
+#define MSR_DEVICE "/dev/cpu/0/msr"
 
 
 #if defined(__FreeBSD__) || defined(__APPLE__)
@@ -1214,6 +1215,11 @@ virHostCPUGetKVMMaxVCPUs(void)
         return -1;
     }
 
+/* Ignore KVM_CAP_MAX_VCPUS on RHEL - the recommended maximum
+ * is treated as a hard limit.
+ */
+# undef KVM_CAP_MAX_VCPUS
+
 # ifdef KVM_CAP_MAX_VCPUS
     /* at first try KVM_CAP_MAX_VCPUS to determine the maximum count */
     if ((ret = ioctl(fd, KVM_CHECK_EXTENSION, KVM_CAP_MAX_VCPUS)) > 0)
@@ -1289,3 +1295,157 @@ virHostCPUGetMicrocodeVersion(void)
 }
 
 #endif /* __linux__ */
+
+
+#if HAVE_LINUX_KVM_H && defined(KVM_GET_MSRS) && \
+    (defined(__i386__) || defined(__x86_64__)) && \
+    (defined(__linux__) || defined(__FreeBSD__))
+static int
+virHostCPUGetMSRFromKVM(unsigned long index,
+                        uint64_t *result)
+{
+    VIR_AUTOCLOSE fd = -1;
+    struct {
+        struct kvm_msrs header;
+        struct kvm_msr_entry entry;
+    } msr = {
+        .header = { .nmsrs = 1 },
+        .entry = { .index = index },
+    };
+
+    if ((fd = open(KVM_DEVICE, O_RDONLY)) < 0) {
+        virReportSystemError(errno, _("Unable to open %s"), KVM_DEVICE);
+        return -1;
+    }
+
+    if (ioctl(fd, KVM_GET_MSRS, &msr) < 0) {
+        VIR_DEBUG("Cannot get MSR 0x%lx from KVM", index);
+        return 1;
+    }
+
+    *result = msr.entry.data;
+    return 0;
+}
+
+/*
+ * Returns 0 on success,
+ *         1 when the MSR is not supported by the host CPU,
+*         -1 on error.
+ */
+int
+virHostCPUGetMSR(unsigned long index,
+                 uint64_t *msr)
+{
+    VIR_AUTOCLOSE fd = -1;
+    char ebuf[1024];
+
+    *msr = 0;
+
+    if ((fd = open(MSR_DEVICE, O_RDONLY)) < 0) {
+        VIR_DEBUG("Unable to open %s: %s",
+                  MSR_DEVICE, virStrerror(errno, ebuf, sizeof(ebuf)));
+    } else {
+        int rc = pread(fd, msr, sizeof(*msr), index);
+
+        if (rc == sizeof(*msr))
+            return 0;
+
+        if (rc < 0 && errno == EIO) {
+            VIR_DEBUG("CPU does not support MSR 0x%lx", index);
+            return 1;
+        }
+
+        VIR_DEBUG("Cannot read MSR 0x%lx from %s: %s",
+                  index, MSR_DEVICE, virStrerror(errno, ebuf, sizeof(ebuf)));
+    }
+
+    VIR_DEBUG("Falling back to KVM ioctl");
+
+    return virHostCPUGetMSRFromKVM(index, msr);
+}
+
+
+# define VMX_PROCBASED_CTLS2_MSR 0x48b
+# define VMX_USE_TSC_SCALING (1 << 25)
+
+/*
+ * This function should only be called when the host CPU supports invariant TSC
+ * (invtsc CPUID feature).
+ *
+ * Returns pointer to the TSC info structure on success,
+ *         NULL when TSC cannot be probed otherwise.
+ */
+virHostCPUTscInfoPtr
+virHostCPUGetTscInfo(void)
+{
+    virHostCPUTscInfoPtr info;
+    VIR_AUTOCLOSE kvmFd = -1;
+    VIR_AUTOCLOSE vmFd = -1;
+    VIR_AUTOCLOSE vcpuFd = -1;
+    uint64_t msr = 0;
+    int rc;
+
+    if ((kvmFd = open(KVM_DEVICE, O_RDONLY)) < 0) {
+        virReportSystemError(errno, _("Unable to open %s"), KVM_DEVICE);
+        return NULL;
+    }
+
+    if ((vmFd = ioctl(kvmFd, KVM_CREATE_VM, 0)) < 0) {
+        virReportSystemError(errno, "%s",
+                             _("Unable to create KVM VM for TSC probing"));
+        return NULL;
+    }
+
+    if ((vcpuFd = ioctl(vmFd, KVM_CREATE_VCPU, 0)) < 0) {
+        virReportSystemError(errno, "%s",
+                             _("Unable to create KVM vCPU for TSC probing"));
+        return NULL;
+    }
+
+    if ((rc = ioctl(vcpuFd, KVM_GET_TSC_KHZ)) < 0) {
+        virReportSystemError(errno, "%s",
+                             _("Unable to probe TSC frequency"));
+        return NULL;
+    }
+
+    if (VIR_ALLOC(info) < 0)
+        return NULL;
+
+    info->frequency = rc * 1000ULL;
+
+    if (virHostCPUGetMSR(VMX_PROCBASED_CTLS2_MSR, &msr) == 0) {
+        /* High 32 bits of the MSR value indicate whether specific control
+         * can be set to 1. */
+        msr >>= 32;
+
+        info->scaling = virTristateBoolFromBool(!!(msr & VMX_USE_TSC_SCALING));
+    }
+
+    VIR_DEBUG("Detected TSC frequency %llu Hz, scaling %s",
+              info->frequency, virTristateBoolTypeToString(info->scaling));
+
+    return info;
+}
+
+#else
+
+int
+virHostCPUGetMSR(unsigned long index ATTRIBUTE_UNUSED,
+                 uint64_t *msr ATTRIBUTE_UNUSED)
+{
+    virReportSystemError(ENOSYS, "%s",
+                         _("Reading MSRs is not supported on this platform"));
+    return -1;
+}
+
+virHostCPUTscInfoPtr
+virHostCPUGetTscInfo(void)
+{
+    virReportSystemError(ENOSYS, "%s",
+                         _("Probing TSC is not supported on this platform"));
+    return NULL;
+}
+
+#endif /* HAVE_LINUX_KVM_H && defined(KVM_GET_MSRS) && \
+          (defined(__i386__) || defined(__x86_64__)) && \
+          (defined(__linux__) || defined(__FreeBSD__)) */

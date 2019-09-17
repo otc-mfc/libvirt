@@ -382,6 +382,7 @@ typedef struct _virDomainHostdevSubsysMediatedDev virDomainHostdevSubsysMediated
 typedef virDomainHostdevSubsysMediatedDev *virDomainHostdevSubsysMediatedDevPtr;
 struct _virDomainHostdevSubsysMediatedDev {
     int model;                          /* enum virMediatedDeviceModelType */
+    int display; /* virTristateSwitch */
     char uuidstr[VIR_UUID_STRING_BUFLEN];   /* mediated device's uuid string */
 };
 
@@ -1423,6 +1424,7 @@ typedef enum {
     VIR_DOMAIN_VIDEO_TYPE_PARALLELS, /* pseudo device for VNC in containers */
     VIR_DOMAIN_VIDEO_TYPE_VIRTIO,
     VIR_DOMAIN_VIDEO_TYPE_GOP,
+    VIR_DOMAIN_VIDEO_TYPE_NONE,
 
     VIR_DOMAIN_VIDEO_TYPE_LAST
 } virDomainVideoType;
@@ -1453,7 +1455,7 @@ struct _virDomainVideoDriverDef {
 };
 
 struct _virDomainVideoDef {
-    int type;
+    int type;   /* enum virDomainVideoType */
     unsigned int ram;  /* kibibytes (multiples of 1024) */
     unsigned int vram; /* kibibytes (multiples of 1024) */
     unsigned int vram64; /* kibibytes (multiples of 1024) */
@@ -1473,6 +1475,7 @@ typedef enum {
     VIR_DOMAIN_GRAPHICS_TYPE_RDP,
     VIR_DOMAIN_GRAPHICS_TYPE_DESKTOP,
     VIR_DOMAIN_GRAPHICS_TYPE_SPICE,
+    VIR_DOMAIN_GRAPHICS_TYPE_EGL_HEADLESS,
 
     VIR_DOMAIN_GRAPHICS_TYPE_LAST
 } virDomainGraphicsType;
@@ -1653,6 +1656,9 @@ struct _virDomainGraphicsDef {
             virTristateBool gl;
             char *rendernode;
         } spice;
+        struct {
+            char *rendernode;
+        } egl_headless;
     } data;
     /* nListens, listens, and *port are only useful if type is vnc,
      * rdp, or spice. They've been extracted from the union only to
@@ -1771,6 +1777,7 @@ typedef enum {
     VIR_DOMAIN_FEATURE_IOAPIC,
     VIR_DOMAIN_FEATURE_HPT,
     VIR_DOMAIN_FEATURE_VMCOREINFO,
+    VIR_DOMAIN_FEATURE_HTM,
 
     VIR_DOMAIN_FEATURE_LAST
 } virDomainFeature;
@@ -2228,10 +2235,10 @@ struct _virDomainCputune {
 };
 
 
-typedef struct _virDomainCachetuneDef virDomainCachetuneDef;
-typedef virDomainCachetuneDef *virDomainCachetuneDefPtr;
+typedef struct _virDomainResctrlDef virDomainResctrlDef;
+typedef virDomainResctrlDef *virDomainResctrlDefPtr;
 
-struct _virDomainCachetuneDef {
+struct _virDomainResctrlDef {
     virBitmapPtr vcpus;
     virResctrlAllocPtr alloc;
 };
@@ -2409,8 +2416,8 @@ struct _virDomainDef {
 
     virDomainCputune cputune;
 
-    virDomainCachetuneDefPtr *cachetunes;
-    size_t ncachetunes;
+    virDomainResctrlDefPtr *resctrls;
+    size_t nresctrls;
 
     virDomainNumaPtr numa;
     virDomainResourceDefPtr resource;
@@ -2781,6 +2788,10 @@ virDomainXMLNamespacePtr
 virDomainXMLOptionGetNamespace(virDomainXMLOptionPtr xmlopt)
     ATTRIBUTE_NONNULL(1);
 
+bool
+virDomainSCSIDriveAddressIsUsed(const virDomainDef *def,
+                                const virDomainDeviceDriveAddress *addr);
+
 int virDomainDefPostParse(virDomainDefPtr def,
                           virCapsPtr caps,
                           unsigned int parseFlags,
@@ -2883,6 +2894,7 @@ void virDomainNVRAMDefFree(virDomainNVRAMDefPtr def);
 void virDomainWatchdogDefFree(virDomainWatchdogDefPtr def);
 virDomainVideoDefPtr virDomainVideoDefNew(void);
 void virDomainVideoDefFree(virDomainVideoDefPtr def);
+void virDomainVideoDefClear(virDomainVideoDefPtr def);
 virDomainHostdevDefPtr virDomainHostdevDefNew(void);
 void virDomainHostdevDefClear(virDomainHostdevDefPtr def);
 void virDomainHostdevDefFree(virDomainHostdevDefPtr def);
@@ -2894,7 +2906,8 @@ void virDomainDeviceDefFree(virDomainDeviceDefPtr def);
 virDomainDeviceDefPtr virDomainDeviceDefCopy(virDomainDeviceDefPtr src,
                                              const virDomainDef *def,
                                              virCapsPtr caps,
-                                             virDomainXMLOptionPtr xmlopt);
+                                             virDomainXMLOptionPtr xmlopt,
+                                             void *parseOpaque);
 int virDomainDeviceAddressIsValid(virDomainDeviceInfoPtr info,
                                   int type);
 virDomainDeviceInfoPtr virDomainDeviceGetInfo(virDomainDeviceDefPtr device);
@@ -2928,12 +2941,14 @@ void virDomainObjAssignDef(virDomainObjPtr domain,
                            virDomainDefPtr *oldDef);
 int virDomainObjSetDefTransient(virCapsPtr caps,
                                 virDomainXMLOptionPtr xmlopt,
-                                virDomainObjPtr domain);
+                                virDomainObjPtr domain,
+                                void *parseOpaque);
 void virDomainObjRemoveTransientDef(virDomainObjPtr domain);
 virDomainDefPtr
 virDomainObjGetPersistentDef(virCapsPtr caps,
                              virDomainXMLOptionPtr xmlopt,
-                             virDomainObjPtr domain);
+                             virDomainObjPtr domain,
+                             void *parseOpaque);
 
 int virDomainObjUpdateModificationImpact(virDomainObjPtr vm,
                                          unsigned int *flags);
@@ -2954,7 +2969,8 @@ virDomainDefPtr virDomainDefCopy(virDomainDefPtr src,
                                  bool migratable);
 virDomainDefPtr virDomainObjCopyPersistentDef(virDomainObjPtr dom,
                                               virCapsPtr caps,
-                                              virDomainXMLOptionPtr xmlopt);
+                                              virDomainXMLOptionPtr xmlopt,
+                                              void *parseOpaque);
 
 typedef enum {
     /* parse internal domain status information */
@@ -3024,6 +3040,7 @@ virDomainDeviceDefPtr virDomainDeviceDefParse(const char *xmlStr,
                                               const virDomainDef *def,
                                               virCapsPtr caps,
                                               virDomainXMLOptionPtr xmlopt,
+                                              void *parseOpaque,
                                               unsigned int flags);
 virDomainDiskDefPtr virDomainDiskDefParse(const char *xmlStr,
                                           const virDomainDef *def,
@@ -3638,5 +3655,17 @@ virDomainDiskGetDetectZeroesMode(virDomainDiskDiscard discard,
 
 bool
 virDomainDefHasManagedPR(const virDomainDef *def);
+
+bool
+virDomainGraphicsDefHasOpenGL(const virDomainDef *def);
+
+bool
+virDomainGraphicsSupportsRenderNode(const virDomainGraphicsDef *graphics);
+
+const char *
+virDomainGraphicsGetRenderNode(const virDomainGraphicsDef *graphics);
+
+bool
+virDomainGraphicsNeedsAutoRenderNode(const virDomainGraphicsDef *graphics);
 
 #endif /* __DOMAIN_CONF_H */

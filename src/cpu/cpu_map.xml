@@ -257,6 +257,9 @@
     <feature name='clwb'>
       <cpuid eax_in='0x07' ecx_in='0x00' ebx='0x01000000'/>
     </feature>
+    <feature name='intel-pt'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ebx='0x02000000'/>
+    </feature>
     <feature name='avx512pf'>
       <cpuid eax_in='0x07' ecx_in='0x00' ebx='0x04000000'/>
     </feature>
@@ -279,14 +282,41 @@
     <feature name='avx512vbmi'>
       <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000002'/>
     </feature>
+    <feature name='umip'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000004'/>
+    </feature>
     <feature name='pku'>
       <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000008'/>
     </feature>
     <feature name='ospke'>
       <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000010'/>
     </feature>
+    <feature name='avx512vbmi2'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000040'/>
+    </feature>
+    <feature name='gfni'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000100'/>
+    </feature>
+    <feature name='vaes'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000200'/>
+    </feature>
+    <feature name='vpclmulqdq'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000400'/>
+    </feature>
+    <feature name='avx512vnni'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00000800'/>
+    </feature>
+    <feature name='avx512bitalg'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00001000'/>
+    </feature>
+    <feature name='avx512-vpopcntdq'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00004000'/>
+    </feature>
     <feature name='la57'>
       <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x00010000'/>
+    </feature>
+    <feature name='cldemote'>
+      <cpuid eax_in='0x07' ecx_in='0x00' ecx='0x02000000'/>
     </feature>
 
     <feature name='avx512-4vnniw'>
@@ -295,8 +325,20 @@
     <feature name='avx512-4fmaps'>
       <cpuid eax_in='0x07' ecx_in='0x00' edx='0x00000008'/>
     </feature>
+    <feature name='md-clear'> <!-- md_clear -->
+      <cpuid eax_in='0x07' ecx_in='0x00' edx='0x00000400'/>
+    </feature>
+    <feature name='pconfig'>
+      <cpuid eax_in='0x07' ecx_in='0x00' edx='0x00040000'/>
+    </feature>
     <feature name='spec-ctrl'>
       <cpuid eax_in='0x07' ecx_in='0x00' edx='0x04000000'/>
+    </feature>
+    <feature name='stibp'>
+      <cpuid eax_in='0x07' ecx_in='0x00' edx='0x08000000'/>
+    </feature>
+    <feature name='arch-facilities' migratable='no'>
+      <cpuid eax_in='0x07' ecx_in='0x00' edx='0x20000000'/>
     </feature>
     <feature name='ssbd'>
       <cpuid eax_in='0x07' ecx_in='0x00' edx='0x80000000'/>
@@ -430,6 +472,9 @@
     </feature>
 
     <!-- More AMD-specific features -->
+    <feature name='wbnoinvd'>
+      <cpuid eax_in='0x80000008' ebx='0x00000200'/>
+    </feature>
     <feature name='ibpb'>
       <cpuid eax_in='0x80000008' ebx='0x00001000'/>
     </feature>
@@ -783,7 +828,8 @@
 
     <!-- Intel CPU models -->
     <model name='Conroe'>
-      <signature family='6' model='15'/>
+      <signature family='6' model='15'/> <!-- 0006f0 -->
+      <signature family='6' model='22'/> <!-- 010660 -->
       <vendor name='Intel'/>
       <feature name='apic'/>
       <feature name='clflush'/>
@@ -815,7 +861,8 @@
     </model>
 
     <model name='Penryn'>
-      <signature family='6' model='23'/>
+      <signature family='6' model='23'/> <!-- 010670 -->
+      <signature family='6' model='29'/> <!-- 0106d0 -->
       <vendor name='Intel'/>
       <feature name='apic'/>
       <feature name='clflush'/>
@@ -849,7 +896,10 @@
     </model>
 
     <model name='Nehalem'>
-      <signature family='6' model='26'/>
+      <signature family='6' model='26'/> <!-- 0106a0 -->
+      <signature family='6' model='30'/> <!-- 0106e0 -->
+      <signature family='6' model='31'/> <!-- 0106f0 -->
+      <signature family='6' model='46'/> <!-- 0206e0 -->
       <vendor name='Intel'/>
       <feature name='apic'/>
       <feature name='clflush'/>
@@ -885,7 +935,10 @@
     </model>
 
     <model name='Nehalem-IBRS'>
-      <signature family='6' model='26'/>
+      <signature family='6' model='26'/> <!-- 0106a0 -->
+      <signature family='6' model='30'/> <!-- 0106e0 -->
+      <signature family='6' model='31'/> <!-- 0106f0 -->
+      <signature family='6' model='46'/> <!-- 0206e0 -->
       <vendor name='Intel'/>
       <feature name='apic'/>
       <feature name='clflush'/>
@@ -922,7 +975,9 @@
     </model>
 
     <model name='Westmere'>
-      <signature family='6' model='44'/>
+      <signature family='6' model='44'/> <!-- 0206c0 -->
+      <signature family='6' model='47'/> <!-- 0206f0 -->
+      <signature family='6' model='37'/> <!-- 020650 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -959,7 +1014,7 @@
     </model>
 
     <model name='Westmere-IBRS'>
-      <signature family='6' model='44'/>
+      <signature family='6' model='44'/> <!-- 0206c0 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -997,7 +1052,8 @@
     </model>
 
     <model name='SandyBridge'>
-      <signature family='6' model='42'/>
+      <signature family='6' model='42'/> <!-- 0206a0 -->
+      <signature family='6' model='45'/> <!-- 0206d0 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -1040,7 +1096,8 @@
     </model>
 
     <model name='SandyBridge-IBRS'>
-      <signature family='6' model='42'/>
+      <signature family='6' model='42'/> <!-- 0206a0 -->
+      <signature family='6' model='45'/> <!-- 0206d0 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -1084,7 +1141,8 @@
     </model>
 
     <model name='IvyBridge'>
-      <signature family='6' model='58'/>
+      <signature family='6' model='58'/> <!-- 0306a0 -->
+      <signature family='6' model='62'/> <!-- 0306e0 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -1133,7 +1191,8 @@
     </model>
 
     <model name='IvyBridge-IBRS'>
-      <signature family='6' model='58'/>
+      <signature family='6' model='58'/> <!-- 0306a0 -->
+      <signature family='6' model='62'/> <!-- 0306e0 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -1183,7 +1242,10 @@
     </model>
 
     <model name='Haswell-noTSX'>
-      <signature family='6' model='60'/>
+      <signature family='6' model='60'/> <!-- 0306c0 -->
+      <signature family='6' model='63'/> <!-- 0306f0 -->
+      <signature family='6' model='69'/> <!-- 040650 -->
+      <signature family='6' model='70'/> <!-- 040660 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -1236,7 +1298,10 @@
     </model>
 
     <model name='Haswell-noTSX-IBRS'>
-      <signature family='6' model='60'/>
+      <signature family='6' model='60'/> <!-- 0306c0 -->
+      <signature family='6' model='63'/> <!-- 0306f0 -->
+      <signature family='6' model='69'/> <!-- 040650 -->
+      <signature family='6' model='70'/> <!-- 040660 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -1290,7 +1355,10 @@
     </model>
 
     <model name='Haswell'>
-      <signature family='6' model='60'/>
+      <signature family='6' model='60'/> <!-- 0306c0 -->
+      <signature family='6' model='63'/> <!-- 0306f0 -->
+      <signature family='6' model='69'/> <!-- 040650 -->
+      <signature family='6' model='70'/> <!-- 040660 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -1345,7 +1413,10 @@
     </model>
 
     <model name='Haswell-IBRS'>
-      <signature family='6' model='60'/>
+      <signature family='6' model='60'/> <!-- 0306c0 -->
+      <signature family='6' model='63'/> <!-- 0306f0 -->
+      <signature family='6' model='69'/> <!-- 040650 -->
+      <signature family='6' model='70'/> <!-- 040660 -->
       <vendor name='Intel'/>
       <feature name='aes'/>
       <feature name='apic'/>
@@ -1401,7 +1472,10 @@
     </model>
 
     <model name='Broadwell-noTSX'>
-      <signature family='6' model='61'/>
+      <signature family='6' model='61'/> <!-- 0306d0 -->
+      <signature family='6' model='71'/> <!-- 040670 -->
+      <signature family='6' model='79'/> <!-- 0406f0 -->
+      <signature family='6' model='86'/> <!-- 050660 -->
       <vendor name='Intel'/>
       <feature name='3dnowprefetch'/>
       <feature name='adx'/>
@@ -1458,7 +1532,10 @@
     </model>
 
     <model name='Broadwell-noTSX-IBRS'>
-      <signature family='6' model='61'/>
+      <signature family='6' model='61'/> <!-- 0306d0 -->
+      <signature family='6' model='71'/> <!-- 040670 -->
+      <signature family='6' model='79'/> <!-- 0406f0 -->
+      <signature family='6' model='86'/> <!-- 050660 -->
       <vendor name='Intel'/>
       <feature name='3dnowprefetch'/>
       <feature name='adx'/>
@@ -1516,7 +1593,10 @@
     </model>
 
     <model name='Broadwell'>
-      <signature family='6' model='61'/>
+      <signature family='6' model='61'/> <!-- 0306d0 -->
+      <signature family='6' model='71'/> <!-- 040670 -->
+      <signature family='6' model='79'/> <!-- 0406f0 -->
+      <signature family='6' model='86'/> <!-- 050660 -->
       <vendor name='Intel'/>
       <feature name='3dnowprefetch'/>
       <feature name='adx'/>
@@ -1575,7 +1655,10 @@
     </model>
 
     <model name='Broadwell-IBRS'>
-      <signature family='6' model='61'/>
+      <signature family='6' model='61'/> <!-- 0306d0 -->
+      <signature family='6' model='71'/> <!-- 040670 -->
+      <signature family='6' model='79'/> <!-- 0406f0 -->
+      <signature family='6' model='86'/> <!-- 050660 -->
       <vendor name='Intel'/>
       <feature name='3dnowprefetch'/>
       <feature name='adx'/>
@@ -1635,7 +1718,12 @@
     </model>
 
     <model name='Skylake-Client'>
-      <signature family='6' model='94'/>
+      <signature family='6' model='94'/> <!-- 0506e0 -->
+      <signature family='6' model='78'/> <!-- 0406e0 -->
+      <!-- These are Kaby Lake and Coffee Lake successors to Skylake,
+           but we don't have specific models for them. -->
+      <signature family='6' model='142'/> <!-- 0806e0 -->
+      <signature family='6' model='158'/> <!-- 0906e0 -->
       <vendor name='Intel'/>
       <feature name='3dnowprefetch'/>
       <feature name='abm'/>
@@ -1703,7 +1791,12 @@
     </model>
 
     <model name='Skylake-Client-IBRS'>
-      <signature family='6' model='94'/>
+      <signature family='6' model='94'/> <!-- 0506e0 -->
+      <signature family='6' model='78'/> <!-- 0406e0 -->
+      <!-- These are Kaby Lake and Coffee Lake successors to Skylake,
+           but we don't have specific models for them. -->
+      <signature family='6' model='142'/> <!-- 0806e0 -->
+      <signature family='6' model='158'/> <!-- 0906e0 -->
       <vendor name='Intel'/>
       <feature name='3dnowprefetch'/>
       <feature name='abm'/>
@@ -1772,7 +1865,7 @@
     </model>
 
     <model name='Skylake-Server'>
-      <signature family='6' model='85'/>
+      <signature family='6' model='85'/> <!-- 050654 -->
       <vendor name='Intel'/>
       <feature name='3dnowprefetch'/>
       <feature name='abm'/>
@@ -1847,7 +1940,7 @@
     </model>
 
     <model name='Skylake-Server-IBRS'>
-      <signature family='6' model='85'/>
+      <signature family='6' model='85'/> <!-- 050654 -->
       <vendor name='Intel'/>
       <feature name='3dnowprefetch'/>
       <feature name='abm'/>
@@ -1922,6 +2015,184 @@
       <feature name='xsaveopt'/>
     </model>
 
+    <model name='Icelake-Client'>
+      <signature family='6' model='126'/> <!-- 0706e0 -->
+      <vendor name='Intel'/>
+      <feature name='3dnowprefetch'/>
+      <feature name='abm'/>
+      <feature name='adx'/>
+      <feature name='aes'/>
+      <feature name='apic'/>
+      <feature name='arat'/>
+      <feature name='avx'/>
+      <feature name='avx2'/>
+      <feature name='avx512-vpopcntdq'/>
+      <feature name='avx512bitalg'/>
+      <feature name='avx512vbmi'/>
+      <feature name='avx512vbmi2'/>
+      <feature name='avx512vnni'/>
+      <feature name='bmi1'/>
+      <feature name='bmi2'/>
+      <feature name='clflush'/>
+      <feature name='cmov'/>
+      <feature name='cx16'/>
+      <feature name='cx8'/>
+      <feature name='de'/>
+      <feature name='erms'/>
+      <feature name='f16c'/>
+      <feature name='fma'/>
+      <feature name='fpu'/>
+      <feature name='fsgsbase'/>
+      <feature name='fxsr'/>
+      <feature name='gfni'/>
+      <feature name='hle'/>
+      <feature name='intel-pt'/>
+      <feature name='invpcid'/>
+      <feature name='lahf_lm'/>
+      <feature name='lm'/>
+      <feature name='mca'/>
+      <feature name='mce'/>
+      <feature name='mmx'/>
+      <feature name='movbe'/>
+      <feature name='mpx'/>
+      <feature name='msr'/>
+      <feature name='mtrr'/>
+      <feature name='nx'/>
+      <!-- 'ospke' is a dynamic feature and cannot be enabled manually
+           see QEMU's commit 9ccb9784b57 for more details -->
+      <feature name='pae'/>
+      <feature name='pat'/>
+      <feature name='pcid'/>
+      <feature name='pclmuldq'/>
+      <feature name='pge'/>
+      <feature name='pku'/>
+      <feature name='pni'/>
+      <feature name='popcnt'/>
+      <feature name='pse'/>
+      <feature name='pse36'/>
+      <feature name='rdrand'/>
+      <feature name='rdseed'/>
+      <feature name='rdtscp'/>
+      <feature name='rtm'/>
+      <feature name='sep'/>
+      <feature name='smap'/>
+      <feature name='smep'/>
+      <feature name='spec-ctrl'/>
+      <feature name='ssbd'/>
+      <feature name='sse'/>
+      <feature name='sse2'/>
+      <feature name='sse4.1'/>
+      <feature name='sse4.2'/>
+      <feature name='ssse3'/>
+      <feature name='syscall'/>
+      <feature name='tsc'/>
+      <feature name='tsc-deadline'/>
+      <feature name='umip'/>
+      <feature name='vaes'/>
+      <feature name='vme'/>
+      <feature name='vpclmulqdq'/>
+      <feature name='wbnoinvd'/>
+      <feature name='x2apic'/>
+      <feature name='xgetbv1'/>
+      <feature name='xsave'/>
+      <feature name='xsavec'/>
+      <feature name='xsaveopt'/>
+    </model>
+
+    <model name='Icelake-Server'>
+      <signature family='6' model='134'/> <!-- 080660 -->
+      <vendor name='Intel'/>
+      <feature name='3dnowprefetch'/>
+      <feature name='abm'/>
+      <feature name='adx'/>
+      <feature name='aes'/>
+      <feature name='apic'/>
+      <feature name='arat'/>
+      <feature name='avx'/>
+      <feature name='avx2'/>
+      <feature name='avx512-vpopcntdq'/>
+      <feature name='avx512bitalg'/>
+      <feature name='avx512bw'/>
+      <feature name='avx512cd'/>
+      <feature name='avx512dq'/>
+      <feature name='avx512f'/>
+      <feature name='avx512vbmi'/>
+      <feature name='avx512vbmi2'/>
+      <feature name='avx512vl'/>
+      <feature name='avx512vnni'/>
+      <feature name='bmi1'/>
+      <feature name='bmi2'/>
+      <feature name='clflush'/>
+      <feature name='clflushopt'/>
+      <feature name='clwb'/>
+      <feature name='cmov'/>
+      <feature name='cx16'/>
+      <feature name='cx8'/>
+      <feature name='de'/>
+      <feature name='erms'/>
+      <feature name='f16c'/>
+      <feature name='fma'/>
+      <feature name='fpu'/>
+      <feature name='fsgsbase'/>
+      <feature name='fxsr'/>
+      <feature name='gfni'/>
+      <feature name='hle'/>
+      <feature name='intel-pt'/>
+      <feature name='invpcid'/>
+      <feature name='la57'/>
+      <feature name='lahf_lm'/>
+      <feature name='lm'/>
+      <feature name='mca'/>
+      <feature name='mce'/>
+      <feature name='mmx'/>
+      <feature name='movbe'/>
+      <feature name='mpx'/>
+      <feature name='msr'/>
+      <feature name='mtrr'/>
+      <feature name='nx'/>
+      <!-- 'ospke' is a dynamic feature and cannot be enabled manually
+           see QEMU's commit 9ccb9784b57 for more details -->
+      <feature name='pae'/>
+      <feature name='pat'/>
+      <feature name='pcid'/>
+      <feature name='pclmuldq'/>
+      <feature name='pconfig'/>
+      <feature name='pdpe1gb'/>
+      <feature name='pge'/>
+      <feature name='pku'/>
+      <feature name='pni'/>
+      <feature name='popcnt'/>
+      <feature name='pse'/>
+      <feature name='pse36'/>
+      <feature name='rdrand'/>
+      <feature name='rdseed'/>
+      <feature name='rdtscp'/>
+      <feature name='rtm'/>
+      <feature name='sep'/>
+      <feature name='smap'/>
+      <feature name='smep'/>
+      <feature name='spec-ctrl'/>
+      <feature name='ssbd'/>
+      <feature name='sse'/>
+      <feature name='sse2'/>
+      <feature name='sse4.1'/>
+      <feature name='sse4.2'/>
+      <feature name='ssse3'/>
+      <feature name='syscall'/>
+      <feature name='tsc'/>
+      <feature name='tsc-deadline'/>
+      <feature name='umip'/>
+      <feature name='vaes'/>
+      <feature name='vme'/>
+      <feature name='vpclmulqdq'/>
+      <feature name='wbnoinvd'/>
+      <feature name='x2apic'/>
+      <feature name='xgetbv1'/>
+      <feature name='xsave'/>
+      <feature name='xsavec'/>
+      <feature name='xsaveopt'/>
+    </model>
+
     <!-- AMD CPUs -->
     <model name='athlon'>
       <vendor name='AMD'/>
@@ -1986,7 +2257,7 @@
     </model>
 
     <model name='Opteron_G1'>
-      <signature family='15' model='6'/>
+      <signature family='15' model='6'/> <!-- 100e60 -->
       <vendor name='AMD'/>
       <feature name='apic'/>
       <feature name='clflush'/>
@@ -2016,7 +2287,7 @@
     </model>
 
     <model name='Opteron_G2'>
-      <signature family='15' model='6'/>
+      <signature family='15' model='6'/> <!-- 100e60 -->
       <vendor name='AMD'/>
       <feature name='apic'/>
       <feature name='clflush'/>
@@ -2050,7 +2321,7 @@
     </model>
 
     <model name='Opteron_G3'>
-      <signature family='15' model='6'/>
+      <signature family='15' model='6'/> <!-- 100e60 -->
       <vendor name='AMD'/>
       <feature name='abm'/>
       <feature name='apic'/>
@@ -2089,7 +2360,7 @@
     </model>
 
     <model name='Opteron_G4'>
-      <signature family='21' model='1'/>
+      <signature family='21' model='1'/> <!-- 600f10 -->
       <vendor name='AMD'/>
       <feature name='3dnowprefetch'/>
       <feature name='abm'/>
@@ -2138,7 +2409,7 @@
     </model>
 
     <model name='Opteron_G5'>
-      <signature family='21' model='2'/>
+      <signature family='21' model='2'/> <!-- 600f20 -->
       <vendor name='AMD'/>
       <feature name='3dnowprefetch'/>
       <feature name='abm'/>
@@ -2190,7 +2461,7 @@
     </model>
 
     <model name='EPYC'>
-      <signature family='23' model='1'/>
+      <signature family='23' model='1'/> <!-- 800f10 -->
       <vendor name='AMD'/>
       <feature name='3dnowprefetch'/>
       <feature name='abm'/>
@@ -2261,7 +2532,7 @@
     </model>
 
     <model name='EPYC-IBPB'>
-      <signature family='23' model='1'/>
+      <signature family='23' model='1'/> <!-- 800f10 -->
       <vendor name='AMD'/>
       <feature name='3dnowprefetch'/>
       <feature name='abm'/>

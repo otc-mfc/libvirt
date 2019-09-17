@@ -3852,6 +3852,19 @@ qemuDomainDefValidateFeatures(const virDomainDef *def,
             }
             break;
 
+        case VIR_DOMAIN_FEATURE_HTM:
+            if (def->features[i] != VIR_TRISTATE_SWITCH_ABSENT &&
+                !qemuDomainIsPSeries(def)) {
+                virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                               _("The '%s' feature is not supported for "
+                                 "architecture '%s' or machine type '%s'"),
+                               featureName,
+                               virArchToString(def->os.arch),
+                               def->os.machine);
+                return -1;
+            }
+            break;
+
         case VIR_DOMAIN_FEATURE_ACPI:
         case VIR_DOMAIN_FEATURE_APIC:
         case VIR_DOMAIN_FEATURE_PAE:
@@ -3986,7 +3999,7 @@ qemuDomainDefValidate(const virDomainDef *def,
         }
     }
 
-    if (def->ncachetunes &&
+    if (def->nresctrls &&
         def->virtType != VIR_DOMAIN_VIRT_KVM) {
         virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
                        _("cachetune is only supported for KVM domains"));
@@ -4373,7 +4386,8 @@ qemuDomainDeviceDefValidateNetwork(const virDomainNetDef *net)
                 }
                 hasIPv4 = true;
 
-                if (ip->prefix < 4 || ip->prefix > 27) {
+                if (ip->prefix > 0 &&
+                    (ip->prefix < 4 || ip->prefix > 27)) {
                     virReportError(VIR_ERR_XML_ERROR, "%s",
                                    _("invalid prefix, must be in range of 4-27"));
                     return -1;
@@ -4437,9 +4451,48 @@ qemuDomainDeviceDefValidateNetwork(const virDomainNetDef *net)
 
 
 static int
-qemuDomainDeviceDefValidateHostdev(const virDomainHostdevDef *hostdev,
-                                   const virDomainDef *def)
+qemuDomainMdevDefValidate(const virDomainHostdevSubsysMediatedDev *mdevsrc,
+                          const virDomainDef *def,
+                          virQEMUCapsPtr qemuCaps)
 {
+    if (mdevsrc->display == VIR_TRISTATE_SWITCH_ABSENT)
+        return 0;
+
+    if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_VFIO_PCI_DISPLAY)) {
+        virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                       _("display property of device vfio-pci is "
+                         "not supported by this version of QEMU"));
+        return -1;
+    }
+
+    if (mdevsrc->model != VIR_MDEV_MODEL_TYPE_VFIO_PCI) {
+        virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                       _("<hostdev> attribute 'display' is only supported"
+                         " with model='vfio-pci'"));
+
+        return -1;
+    }
+
+    if (mdevsrc->display == VIR_TRISTATE_SWITCH_ON) {
+        if (def->ngraphics == 0) {
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                           _("graphics device is needed for attribute value "
+                             "'display=on' in <hostdev>"));
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+
+static int
+qemuDomainDeviceDefValidateHostdev(const virDomainHostdevDef *hostdev,
+                                   const virDomainDef *def,
+                                   virQEMUCapsPtr qemuCaps)
+{
+    const virDomainHostdevSubsysMediatedDev *mdevsrc;
+
     /* forbid capabilities mode hostdev in this kind of hypervisor */
     if (hostdev->mode == VIR_DOMAIN_HOSTDEV_MODE_CAPABILITIES) {
         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
@@ -4449,6 +4502,24 @@ qemuDomainDeviceDefValidateHostdev(const virDomainHostdevDef *hostdev,
         return -1;
     }
 
+    if (hostdev->mode == VIR_DOMAIN_HOSTDEV_MODE_SUBSYS) {
+        switch ((virDomainHostdevSubsysType) hostdev->source.subsys.type) {
+        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_USB:
+        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_PCI:
+        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI:
+        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_SCSI_HOST:
+            break;
+        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_MDEV:
+            mdevsrc = &hostdev->source.subsys.u.mdev;
+            return qemuDomainMdevDefValidate(mdevsrc, def, qemuCaps);
+        case VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_LAST:
+        default:
+            virReportEnumRangeError(virDomainHostdevSubsysType,
+                                    hostdev->source.subsys.type);
+            return -1;
+        }
+    }
+
     return 0;
 }
 
@@ -4456,10 +4527,13 @@ qemuDomainDeviceDefValidateHostdev(const virDomainHostdevDef *hostdev,
 static int
 qemuDomainDeviceDefValidateVideo(const virDomainVideoDef *video)
 {
-    switch (video->type) {
+    switch ((virDomainVideoType) video->type) {
+    case VIR_DOMAIN_VIDEO_TYPE_NONE:
+        return 0;
     case VIR_DOMAIN_VIDEO_TYPE_XEN:
     case VIR_DOMAIN_VIDEO_TYPE_VBOX:
     case VIR_DOMAIN_VIDEO_TYPE_PARALLELS:
+    case VIR_DOMAIN_VIDEO_TYPE_GOP:
     case VIR_DOMAIN_VIDEO_TYPE_DEFAULT:
         virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
                        _("video type '%s' is not supported with QEMU"),
@@ -4601,19 +4675,11 @@ qemuDomainValidateStorageSource(virStorageSourcePtr src,
         }
     }
 
-    if (src->pr) {
-        if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_PR_MANAGER_HELPER)) {
-            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
-                           _("reservations not supported with this QEMU binary"));
-            return -1;
-        }
-
-        if (virStoragePRDefIsManaged(src->pr) && src->pr->path) {
-            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
-                           _("'path' attribute should not be provided for "
-                             "managed reservations"));
-            return -1;
-        }
+    if (src->pr &&
+        !virQEMUCapsGet(qemuCaps, QEMU_CAPS_PR_MANAGER_HELPER)) {
+        virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                       _("reservations not supported with this QEMU binary"));
+        return -1;
     }
 
     return 0;
@@ -5496,6 +5562,58 @@ qemuDomainDeviceDefValidateTPM(virDomainTPMDef *tpm,
 
 
 static int
+qemuDomainDeviceDefValidateGraphics(const virDomainGraphicsDef *graphics,
+                                    const virDomainDef *def,
+                                    virQEMUCapsPtr qemuCaps)
+{
+    bool have_egl_headless = false;
+    size_t i;
+
+    for (i = 0; i < def->ngraphics; i++) {
+        if (def->graphics[i]->type == VIR_DOMAIN_GRAPHICS_TYPE_EGL_HEADLESS) {
+            have_egl_headless = true;
+            break;
+        }
+    }
+
+    /* Only VNC and SPICE can be paired with egl-headless, the other types
+     * either don't make sense to pair with egl-headless or aren't even
+     * supported by QEMU.
+     */
+    if (have_egl_headless) {
+        if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_EGL_HEADLESS)) {
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                           _("egl-headless display is not supported with this "
+                             "QEMU binary"));
+            return -1;
+        }
+
+        if (graphics->type != VIR_DOMAIN_GRAPHICS_TYPE_EGL_HEADLESS &&
+            graphics->type != VIR_DOMAIN_GRAPHICS_TYPE_VNC &&
+            graphics->type != VIR_DOMAIN_GRAPHICS_TYPE_SPICE) {
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                           _("graphics type 'egl-headless' is only supported "
+                             "with one of: 'vnc', 'spice' graphics types"));
+            return -1;
+        }
+
+        /* '-spice gl=on' and '-display egl-headless' are mutually
+         * exclusive
+         */
+        if (graphics->type == VIR_DOMAIN_GRAPHICS_TYPE_SPICE &&
+            graphics->data.spice.gl == VIR_TRISTATE_BOOL_YES) {
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                           _("multiple OpenGL displays are not supported "
+                             "by QEMU"));
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+
+static int
 qemuDomainDeviceDefValidate(const virDomainDeviceDef *dev,
                             const virDomainDef *def,
                             void *opaque)
@@ -5534,7 +5652,8 @@ qemuDomainDeviceDefValidate(const virDomainDeviceDef *dev,
         break;
 
     case VIR_DOMAIN_DEVICE_HOSTDEV:
-        ret = qemuDomainDeviceDefValidateHostdev(dev->data.hostdev, def);
+        ret = qemuDomainDeviceDefValidateHostdev(dev->data.hostdev, def,
+                                                 qemuCaps);
         break;
 
     case VIR_DOMAIN_DEVICE_VIDEO:
@@ -5562,11 +5681,15 @@ qemuDomainDeviceDefValidate(const virDomainDeviceDef *dev,
         ret = qemuDomainDeviceDefValidateTPM(dev->data.tpm, def);
         break;
 
+    case VIR_DOMAIN_DEVICE_GRAPHICS:
+        ret = qemuDomainDeviceDefValidateGraphics(dev->data.graphics, def,
+                                                  qemuCaps);
+        break;
+
     case VIR_DOMAIN_DEVICE_LEASE:
     case VIR_DOMAIN_DEVICE_FS:
     case VIR_DOMAIN_DEVICE_INPUT:
     case VIR_DOMAIN_DEVICE_SOUND:
-    case VIR_DOMAIN_DEVICE_GRAPHICS:
     case VIR_DOMAIN_DEVICE_HUB:
     case VIR_DOMAIN_DEVICE_MEMBALLOON:
     case VIR_DOMAIN_DEVICE_NVRAM:
@@ -6141,6 +6264,36 @@ qemuDomainVsockDefPostParse(virDomainVsockDefPtr vsock)
 
 
 static int
+qemuDomainHostdevDefMdevPostParse(virDomainHostdevSubsysMediatedDevPtr mdevsrc,
+                                  virQEMUCapsPtr qemuCaps)
+{
+    /* QEMU 2.12 added support for vfio-pci display type, we default to
+     * 'display=off' to stay safe from future changes */
+    if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_VFIO_PCI_DISPLAY) &&
+        mdevsrc->model == VIR_MDEV_MODEL_TYPE_VFIO_PCI &&
+        mdevsrc->display == VIR_TRISTATE_SWITCH_ABSENT)
+        mdevsrc->display = VIR_TRISTATE_SWITCH_OFF;
+
+    return 0;
+}
+
+
+static int
+qemuDomainHostdevDefPostParse(virDomainHostdevDefPtr hostdev,
+                              virQEMUCapsPtr qemuCaps)
+{
+    virDomainHostdevSubsysPtr subsys = &hostdev->source.subsys;
+
+    if (hostdev->mode == VIR_DOMAIN_HOSTDEV_MODE_SUBSYS &&
+        hostdev->source.subsys.type == VIR_DOMAIN_HOSTDEV_SUBSYS_TYPE_MDEV &&
+        qemuDomainHostdevDefMdevPostParse(&subsys->u.mdev, qemuCaps) < 0)
+        return -1;
+
+    return 0;
+}
+
+
+static int
 qemuDomainDeviceDefPostParse(virDomainDeviceDefPtr dev,
                              const virDomainDef *def,
                              virCapsPtr caps ATTRIBUTE_UNUSED,
@@ -6190,11 +6343,14 @@ qemuDomainDeviceDefPostParse(virDomainDeviceDefPtr dev,
         ret = qemuDomainVsockDefPostParse(dev->data.vsock);
         break;
 
+    case VIR_DOMAIN_DEVICE_HOSTDEV:
+        ret = qemuDomainHostdevDefPostParse(dev->data.hostdev, qemuCaps);
+        break;
+
     case VIR_DOMAIN_DEVICE_LEASE:
     case VIR_DOMAIN_DEVICE_FS:
     case VIR_DOMAIN_DEVICE_INPUT:
     case VIR_DOMAIN_DEVICE_SOUND:
-    case VIR_DOMAIN_DEVICE_HOSTDEV:
     case VIR_DOMAIN_DEVICE_WATCHDOG:
     case VIR_DOMAIN_DEVICE_GRAPHICS:
     case VIR_DOMAIN_DEVICE_HUB:
@@ -6373,7 +6529,9 @@ qemuDomainObjReleaseAsyncJob(virDomainObjPtr obj)
 static bool
 qemuDomainNestedJobAllowed(qemuDomainObjPrivatePtr priv, qemuDomainJob job)
 {
-    return !priv->job.asyncJob || (priv->job.mask & JOB_MASK(job)) != 0;
+    return !priv->job.asyncJob ||
+           job == QEMU_JOB_NONE ||
+           (priv->job.mask & JOB_MASK(job)) != 0;
 }
 
 bool
@@ -7045,6 +7203,7 @@ qemuDomainObjExitRemote(virDomainObjPtr obj,
 
 static virDomainDefPtr
 qemuDomainDefFromXML(virQEMUDriverPtr driver,
+                     virQEMUCapsPtr qemuCaps,
                      const char *xml)
 {
     virCapsPtr caps;
@@ -7053,7 +7212,7 @@ qemuDomainDefFromXML(virQEMUDriverPtr driver,
     if (!(caps = virQEMUDriverGetCapabilities(driver, false)))
         return NULL;
 
-    def = virDomainDefParseString(xml, caps, driver->xmlopt, NULL,
+    def = virDomainDefParseString(xml, caps, driver->xmlopt, qemuCaps,
                                   VIR_DOMAIN_DEF_PARSE_INACTIVE |
                                   VIR_DOMAIN_DEF_PARSE_SKIP_VALIDATE);
 
@@ -7064,16 +7223,17 @@ qemuDomainDefFromXML(virQEMUDriverPtr driver,
 
 virDomainDefPtr
 qemuDomainDefCopy(virQEMUDriverPtr driver,
+                  virQEMUCapsPtr qemuCaps,
                   virDomainDefPtr src,
                   unsigned int flags)
 {
     virDomainDefPtr ret = NULL;
     char *xml;
 
-    if (!(xml = qemuDomainDefFormatXML(driver, src, flags)))
+    if (!(xml = qemuDomainDefFormatXML(driver, qemuCaps, src, flags)))
         return NULL;
 
-    ret = qemuDomainDefFromXML(driver, xml);
+    ret = qemuDomainDefFromXML(driver, qemuCaps, xml);
 
     VIR_FREE(xml);
     return ret;
@@ -7082,6 +7242,7 @@ qemuDomainDefCopy(virQEMUDriverPtr driver,
 
 static int
 qemuDomainDefFormatBufInternal(virQEMUDriverPtr driver,
+                               virQEMUCapsPtr qemuCaps,
                                virDomainDefPtr def,
                                virCPUDefPtr origCPU,
                                unsigned int flags,
@@ -7090,7 +7251,7 @@ qemuDomainDefFormatBufInternal(virQEMUDriverPtr driver,
     int ret = -1;
     virDomainDefPtr copy = NULL;
     virCapsPtr caps = NULL;
-    virQEMUCapsPtr qemuCaps = NULL;
+    virQEMUCapsPtr qCaps = NULL;
 
     if (!(caps = virQEMUDriverGetCapabilities(driver, false)))
         goto cleanup;
@@ -7098,7 +7259,7 @@ qemuDomainDefFormatBufInternal(virQEMUDriverPtr driver,
     if (!(flags & (VIR_DOMAIN_XML_UPDATE_CPU | VIR_DOMAIN_XML_MIGRATABLE)))
         goto format;
 
-    if (!(copy = virDomainDefCopy(def, caps, driver->xmlopt, NULL,
+    if (!(copy = virDomainDefCopy(def, caps, driver->xmlopt, qemuCaps,
                                   flags & VIR_DOMAIN_XML_MIGRATABLE)))
         goto cleanup;
 
@@ -7109,13 +7270,17 @@ qemuDomainDefFormatBufInternal(virQEMUDriverPtr driver,
         def->cpu &&
         (def->cpu->mode != VIR_CPU_MODE_CUSTOM ||
          def->cpu->model)) {
-        if (!(qemuCaps = virQEMUCapsCacheLookupCopy(driver->qemuCapsCache,
-                                                    def->emulator,
-                                                    def->os.machine)))
-            goto cleanup;
+        if (qemuCaps) {
+            qCaps = virObjectRef(qemuCaps);
+        } else {
+            if (!(qCaps = virQEMUCapsCacheLookupCopy(driver->qemuCapsCache,
+                                                     def->emulator,
+                                                     def->os.machine)))
+                goto cleanup;
+        }
 
         if (virCPUUpdate(def->os.arch, def->cpu,
-                         virQEMUCapsGetHostModel(qemuCaps, def->virtType,
+                         virQEMUCapsGetHostModel(qCaps, def->virtType,
                                                  VIR_QEMU_CAPS_HOST_CPU_MIGRATABLE)) < 0)
             goto cleanup;
     }
@@ -7264,30 +7429,32 @@ qemuDomainDefFormatBufInternal(virQEMUDriverPtr driver,
  cleanup:
     virDomainDefFree(copy);
     virObjectUnref(caps);
-    virObjectUnref(qemuCaps);
+    virObjectUnref(qCaps);
     return ret;
 }
 
 
 int
 qemuDomainDefFormatBuf(virQEMUDriverPtr driver,
+                       virQEMUCapsPtr qemuCaps,
                        virDomainDefPtr def,
                        unsigned int flags,
                        virBufferPtr buf)
 {
-    return qemuDomainDefFormatBufInternal(driver, def, NULL, flags, buf);
+    return qemuDomainDefFormatBufInternal(driver, qemuCaps, def, NULL, flags, buf);
 }
 
 
 static char *
 qemuDomainDefFormatXMLInternal(virQEMUDriverPtr driver,
+                               virQEMUCapsPtr qemuCaps,
                                virDomainDefPtr def,
                                virCPUDefPtr origCPU,
                                unsigned int flags)
 {
     virBuffer buf = VIR_BUFFER_INITIALIZER;
 
-    if (qemuDomainDefFormatBufInternal(driver, def, origCPU, flags, &buf) < 0)
+    if (qemuDomainDefFormatBufInternal(driver, qemuCaps, def, origCPU, flags, &buf) < 0)
         return NULL;
 
     return virBufferContentAndReset(&buf);
@@ -7296,10 +7463,11 @@ qemuDomainDefFormatXMLInternal(virQEMUDriverPtr driver,
 
 char *
 qemuDomainDefFormatXML(virQEMUDriverPtr driver,
+                       virQEMUCapsPtr qemuCaps,
                        virDomainDefPtr def,
                        unsigned int flags)
 {
-    return qemuDomainDefFormatXMLInternal(driver, def, NULL, flags);
+    return qemuDomainDefFormatXMLInternal(driver, qemuCaps, def, NULL, flags);
 }
 
 
@@ -7318,11 +7486,12 @@ char *qemuDomainFormatXML(virQEMUDriverPtr driver,
         origCPU = priv->origCPU;
     }
 
-    return qemuDomainDefFormatXMLInternal(driver, def, origCPU, flags);
+    return qemuDomainDefFormatXMLInternal(driver, priv->qemuCaps, def, origCPU, flags);
 }
 
 char *
 qemuDomainDefFormatLive(virQEMUDriverPtr driver,
+                        virQEMUCapsPtr qemuCaps,
                         virDomainDefPtr def,
                         virCPUDefPtr origCPU,
                         bool inactive,
@@ -7335,7 +7504,7 @@ qemuDomainDefFormatLive(virQEMUDriverPtr driver,
     if (compatible)
         flags |= VIR_DOMAIN_XML_MIGRATABLE;
 
-    return qemuDomainDefFormatXMLInternal(driver, def, origCPU, flags);
+    return qemuDomainDefFormatXMLInternal(driver, qemuCaps, def, origCPU, flags);
 }
 
 
@@ -8894,6 +9063,7 @@ qemuDomainMigratableDefCheckABIStability(virQEMUDriverPtr driver,
 
 bool
 qemuDomainDefCheckABIStability(virQEMUDriverPtr driver,
+                               virQEMUCapsPtr qemuCaps,
                                virDomainDefPtr src,
                                virDomainDefPtr dst)
 {
@@ -8901,8 +9071,8 @@ qemuDomainDefCheckABIStability(virQEMUDriverPtr driver,
     virDomainDefPtr migratableDefDst = NULL;
     bool ret = false;
 
-    if (!(migratableDefSrc = qemuDomainDefCopy(driver, src, COPY_FLAGS)) ||
-        !(migratableDefDst = qemuDomainDefCopy(driver, dst, COPY_FLAGS)))
+    if (!(migratableDefSrc = qemuDomainDefCopy(driver, qemuCaps, src, COPY_FLAGS)) ||
+        !(migratableDefDst = qemuDomainDefCopy(driver, qemuCaps, dst, COPY_FLAGS)))
         goto cleanup;
 
     ret = qemuDomainMigratableDefCheckABIStability(driver,
@@ -8921,14 +9091,15 @@ qemuDomainCheckABIStability(virQEMUDriverPtr driver,
                             virDomainObjPtr vm,
                             virDomainDefPtr dst)
 {
+    qemuDomainObjPrivatePtr priv = vm->privateData;
     virDomainDefPtr migratableSrc = NULL;
     virDomainDefPtr migratableDst = NULL;
     char *xml = NULL;
     bool ret = false;
 
     if (!(xml = qemuDomainFormatXML(driver, vm, COPY_FLAGS)) ||
-        !(migratableSrc = qemuDomainDefFromXML(driver, xml)) ||
-        !(migratableDst = qemuDomainDefCopy(driver, dst, COPY_FLAGS)))
+        !(migratableSrc = qemuDomainDefFromXML(driver, priv->qemuCaps, xml)) ||
+        !(migratableDst = qemuDomainDefCopy(driver, priv->qemuCaps, dst, COPY_FLAGS)))
         goto cleanup;
 
     ret = qemuDomainMigratableDefCheckABIStability(driver,
@@ -9238,6 +9409,9 @@ qemuDomainMachineNeedsFDC(const char *machine)
             STRPREFIX(p, "2.1") ||
             STRPREFIX(p, "2.2") ||
             STRPREFIX(p, "2.3"))
+            return false;
+        if (STRPREFIX(p, "rhel7.0.0") ||
+            STRPREFIX(p, "rhel7.1.0"))
             return false;
         return true;
     }
@@ -11309,11 +11483,9 @@ qemuDomainSetupGraphics(virQEMUDriverConfigPtr cfg ATTRIBUTE_UNUSED,
                         virDomainGraphicsDefPtr gfx,
                         const struct qemuDomainCreateDeviceData *data)
 {
-    const char *rendernode = gfx->data.spice.rendernode;
+    const char *rendernode = virDomainGraphicsGetRenderNode(gfx);
 
-    if (gfx->type != VIR_DOMAIN_GRAPHICS_TYPE_SPICE ||
-        gfx->data.spice.gl != VIR_TRISTATE_BOOL_YES ||
-        !rendernode)
+    if (!rendernode)
         return 0;
 
     return qemuDomainCreateDevice(rendernode, data, false);
@@ -12812,6 +12984,7 @@ qemuDomainPrepareStorageSourcePR(virStorageSourcePtr src,
         return 0;
 
     if (virStoragePRDefIsManaged(src->pr)) {
+        VIR_FREE(src->pr->path);
         if (!(src->pr->path = qemuDomainGetManagedPRSocketPath(priv)))
             return -1;
         if (VIR_STRDUP(src->pr->mgralias, qemuDomainGetManagedPRAlias()) < 0)
@@ -12967,6 +13140,7 @@ qemuProcessEventFree(struct qemuProcessEvent *event)
     case QEMU_PROCESS_EVENT_MONITOR_EOF:
         VIR_FREE(event->data);
         break;
+    case QEMU_PROCESS_EVENT_PR_DISCONNECT:
     case QEMU_PROCESS_EVENT_LAST:
         break;
     }
@@ -12983,4 +13157,33 @@ qemuDomainGetManagedPRSocketPath(qemuDomainObjPrivatePtr priv)
                              qemuDomainGetManagedPRAlias()));
 
     return ret;
+}
+
+
+virDomainEventResumedDetailType
+qemuDomainRunningReasonToResumeEvent(virDomainRunningReason reason)
+{
+    switch (reason) {
+    case VIR_DOMAIN_RUNNING_RESTORED:
+    case VIR_DOMAIN_RUNNING_FROM_SNAPSHOT:
+        return VIR_DOMAIN_EVENT_RESUMED_FROM_SNAPSHOT;
+
+    case VIR_DOMAIN_RUNNING_MIGRATED:
+    case VIR_DOMAIN_RUNNING_MIGRATION_CANCELED:
+        return VIR_DOMAIN_EVENT_RESUMED_MIGRATED;
+
+    case VIR_DOMAIN_RUNNING_POSTCOPY:
+        return VIR_DOMAIN_EVENT_RESUMED_POSTCOPY;
+
+    case VIR_DOMAIN_RUNNING_UNKNOWN:
+    case VIR_DOMAIN_RUNNING_SAVE_CANCELED:
+    case VIR_DOMAIN_RUNNING_BOOTED:
+    case VIR_DOMAIN_RUNNING_UNPAUSED:
+    case VIR_DOMAIN_RUNNING_WAKEUP:
+    case VIR_DOMAIN_RUNNING_CRASHED:
+    case VIR_DOMAIN_RUNNING_LAST:
+        break;
+    }
+
+    return VIR_DOMAIN_EVENT_RESUMED_UNPAUSED;
 }

@@ -273,6 +273,12 @@ typedef int (*qemuMonitorDomainDumpCompletedCallback)(qemuMonitorPtr mon,
                                                       const char *error,
                                                       void *opaque);
 
+typedef int (*qemuMonitorDomainPRManagerStatusChangedCallback)(qemuMonitorPtr mon,
+                                                               virDomainObjPtr vm,
+                                                               const char *prManager,
+                                                               bool connected,
+                                                               void *opaque);
+
 typedef struct _qemuMonitorCallbacks qemuMonitorCallbacks;
 typedef qemuMonitorCallbacks *qemuMonitorCallbacksPtr;
 struct _qemuMonitorCallbacks {
@@ -305,6 +311,7 @@ struct _qemuMonitorCallbacks {
     qemuMonitorDomainAcpiOstInfoCallback domainAcpiOstInfo;
     qemuMonitorDomainBlockThresholdCallback domainBlockThreshold;
     qemuMonitorDomainDumpCompletedCallback domainDumpCompleted;
+    qemuMonitorDomainPRManagerStatusChangedCallback domainPRManagerStatusChanged;
 };
 
 char *qemuMonitorEscapeArg(const char *in);
@@ -432,6 +439,10 @@ int qemuMonitorEmitDumpCompleted(qemuMonitorPtr mon,
                                  int status,
                                  qemuMonitorDumpStatsPtr stats,
                                  const char *error);
+
+int qemuMonitorEmitPRManagerStatusChanged(qemuMonitorPtr mon,
+                                          const char *prManager,
+                                          bool connected);
 
 int qemuMonitorStartCPUs(qemuMonitorPtr mon);
 int qemuMonitorStopCPUs(qemuMonitorPtr mon);
@@ -812,7 +823,8 @@ int qemuMonitorCreateObjectProps(virJSONValuePtr *propsret,
 
 int qemuMonitorAddObject(qemuMonitorPtr mon,
                          virJSONValuePtr *props,
-                         char **alias);
+                         char **alias)
+    ATTRIBUTE_NONNULL(2);
 
 int qemuMonitorDelObject(qemuMonitorPtr mon,
                          const char *objalias);
@@ -878,6 +890,9 @@ int qemuMonitorArbitraryCommand(qemuMonitorPtr mon,
 
 int qemuMonitorInjectNMI(qemuMonitorPtr mon);
 
+int qemuMonitorScreendumpRH(qemuMonitorPtr mon,
+                            const char *device,
+                            const char *file);
 int qemuMonitorScreendump(qemuMonitorPtr mon,
                           const char *device,
                           unsigned int head,
@@ -1144,5 +1159,14 @@ int qemuMonitorBlockdevDel(qemuMonitorPtr mon,
 
 char *
 qemuMonitorGetSEVMeasurement(qemuMonitorPtr mon);
+
+typedef struct _qemuMonitorPRManagerInfo qemuMonitorPRManagerInfo;
+typedef qemuMonitorPRManagerInfo *qemuMonitorPRManagerInfoPtr;
+struct _qemuMonitorPRManagerInfo {
+    bool connected;
+};
+
+int qemuMonitorGetPRManagerInfo(qemuMonitorPtr mon,
+                                virHashTablePtr *retinfo);
 
 #endif /* QEMU_MONITOR_H */

@@ -27,6 +27,15 @@
 # include "internal.h"
 # include "virarch.h"
 # include "virbitmap.h"
+# include "virutil.h"
+
+
+typedef struct _virHostCPUTscInfo virHostCPUTscInfo;
+typedef virHostCPUTscInfo *virHostCPUTscInfoPtr;
+struct _virHostCPUTscInfo {
+    unsigned long long frequency;
+    virTristateBool scaling;
+};
 
 
 int virHostCPUGetStats(int cpuNum,
@@ -67,5 +76,10 @@ virBitmapPtr virHostCPUGetSiblingsList(unsigned int cpu);
 int virHostCPUGetOnline(unsigned int cpu, bool *online);
 
 unsigned int virHostCPUGetMicrocodeVersion(void);
+
+int virHostCPUGetMSR(unsigned long index,
+                     uint64_t *msr);
+
+virHostCPUTscInfoPtr virHostCPUGetTscInfo(void);
 
 #endif /* __VIR_HOSTCPU_H__*/

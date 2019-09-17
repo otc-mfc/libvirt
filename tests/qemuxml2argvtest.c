@@ -575,7 +575,7 @@ testCompareXMLToArgv(const void *data)
         goto cleanup;
     }
 
-    if (!(actualargv = virCommandToString(cmd)))
+    if (!(actualargv = virCommandToString(cmd, false)))
         goto cleanup;
 
     if (virTestCompareToFile(actualargv, args) < 0)
@@ -912,16 +912,15 @@ mymain(void)
     DO_TEST("clock-france", NONE);
     DO_TEST("clock-hpet-off", NONE);
     DO_TEST("clock-catchup", QEMU_CAPS_KVM_PIT_TICK_POLICY);
-    DO_TEST("cpu-kvmclock", QEMU_CAPS_ENABLE_KVM);
-    DO_TEST("cpu-host-kvmclock", QEMU_CAPS_ENABLE_KVM);
+    DO_TEST("cpu-kvmclock", NONE);
+    DO_TEST("cpu-host-kvmclock", NONE);
     DO_TEST("kvmclock", QEMU_CAPS_KVM);
     DO_TEST("clock-timer-hyperv-rtc", QEMU_CAPS_KVM);
 
-    DO_TEST("cpu-eoi-disabled", QEMU_CAPS_ENABLE_KVM);
-    DO_TEST("cpu-eoi-enabled", QEMU_CAPS_ENABLE_KVM);
+    DO_TEST("cpu-eoi-disabled", NONE);
+    DO_TEST("cpu-eoi-enabled", NONE);
     DO_TEST("controller-order",
             QEMU_CAPS_KVM,
-            QEMU_CAPS_ENABLE_KVM,
             QEMU_CAPS_PIIX3_USB_UHCI,
             QEMU_CAPS_CCID_PASSTHRU,
             QEMU_CAPS_SPICE,
@@ -933,7 +932,7 @@ mymain(void)
     DO_TEST("eoi-enabled", NONE);
     DO_TEST("pv-spinlock-disabled", NONE);
     DO_TEST("pv-spinlock-enabled", NONE);
-    DO_TEST("kvmclock+eoi-disabled", QEMU_CAPS_ENABLE_KVM);
+    DO_TEST("kvmclock+eoi-disabled", NONE);
 
     DO_TEST("hyperv", NONE);
     DO_TEST("hyperv-off", NONE);
@@ -945,39 +944,47 @@ mymain(void)
     DO_TEST("pmu-feature", NONE);
     DO_TEST("pmu-feature-off", NONE);
 
-    DO_TEST("hugepages", NONE);
-    DO_TEST("hugepages-numa",
-            QEMU_CAPS_PIIX_DISABLE_S3, QEMU_CAPS_PIIX_DISABLE_S4,
-            QEMU_CAPS_VIRTIO_SCSI,
-            QEMU_CAPS_ICH9_USB_EHCI1,
-            QEMU_CAPS_SPICE,
-            QEMU_CAPS_DEVICE_QXL,
-            QEMU_CAPS_HDA_DUPLEX, QEMU_CAPS_USB_REDIR,
-            QEMU_CAPS_DEVICE_PC_DIMM,
-            QEMU_CAPS_OBJECT_MEMORY_FILE);
-    DO_TEST("hugepages-pages",
+    DO_TEST("pages-discard",
+            QEMU_CAPS_OBJECT_MEMORY_FILE,
+            QEMU_CAPS_OBJECT_MEMORY_FILE_DISCARD);
+    DO_TEST("pages-discard-hugepages",
             QEMU_CAPS_OBJECT_MEMORY_RAM,
             QEMU_CAPS_OBJECT_MEMORY_FILE,
             QEMU_CAPS_OBJECT_MEMORY_FILE_DISCARD);
-    DO_TEST("hugepages-pages2", QEMU_CAPS_OBJECT_MEMORY_RAM,
-            QEMU_CAPS_OBJECT_MEMORY_FILE);
-    DO_TEST("hugepages-pages3", QEMU_CAPS_OBJECT_MEMORY_RAM,
+    DO_TEST("pages-dimm-discard",
+            QEMU_CAPS_DEVICE_PC_DIMM,
             QEMU_CAPS_OBJECT_MEMORY_FILE,
             QEMU_CAPS_OBJECT_MEMORY_FILE_DISCARD);
+    DO_TEST("hugepages-default", NONE);
+    DO_TEST("hugepages-default-2M", NONE);
+    DO_TEST("hugepages-default-system-size", NONE);
+    DO_TEST_PARSE_ERROR("hugepages-default-1G-nodeset-2M", NONE);
+    DO_TEST("hugepages-nodeset", NONE);
+    DO_TEST_PARSE_ERROR("hugepages-nodeset-nonexist",
+                        QEMU_CAPS_DEVICE_PC_DIMM,
+                        QEMU_CAPS_OBJECT_MEMORY_FILE,
+                        QEMU_CAPS_OBJECT_MEMORY_FILE_DISCARD);
+    DO_TEST("hugepages-numa-default",
+            QEMU_CAPS_OBJECT_MEMORY_FILE);
+    DO_TEST("hugepages-numa-default-2M",
+            QEMU_CAPS_OBJECT_MEMORY_RAM,
+            QEMU_CAPS_OBJECT_MEMORY_FILE);
+    DO_TEST("hugepages-numa-default-dimm",
+            QEMU_CAPS_DEVICE_PC_DIMM,
+            QEMU_CAPS_OBJECT_MEMORY_FILE);
+    DO_TEST("hugepages-numa-nodeset",
+            QEMU_CAPS_OBJECT_MEMORY_RAM,
+            QEMU_CAPS_OBJECT_MEMORY_FILE);
+    DO_TEST("hugepages-numa-nodeset-part",
+            QEMU_CAPS_OBJECT_MEMORY_RAM,
+            QEMU_CAPS_OBJECT_MEMORY_FILE);
+    DO_TEST_PARSE_ERROR("hugepages-numa-nodeset-nonexist",
+                        QEMU_CAPS_OBJECT_MEMORY_RAM,
+                        QEMU_CAPS_OBJECT_MEMORY_FILE);
     DO_TEST("hugepages-shared",
             QEMU_CAPS_OBJECT_MEMORY_RAM,
             QEMU_CAPS_OBJECT_MEMORY_FILE);
     DO_TEST_PARSE_ERROR("hugepages-memaccess-invalid", NONE);
-    DO_TEST_FAILURE("hugepages-pages4",
-            QEMU_CAPS_OBJECT_MEMORY_RAM, QEMU_CAPS_OBJECT_MEMORY_FILE);
-    DO_TEST("hugepages-pages5", NONE);
-    DO_TEST("hugepages-pages6", NONE);
-    DO_TEST("hugepages-pages7",
-            QEMU_CAPS_DEVICE_PC_DIMM, QEMU_CAPS_OBJECT_MEMORY_FILE,
-            QEMU_CAPS_OBJECT_MEMORY_FILE_DISCARD);
-    DO_TEST_FAILURE("hugepages-pages8",
-                    QEMU_CAPS_DEVICE_PC_DIMM, QEMU_CAPS_OBJECT_MEMORY_FILE,
-                    QEMU_CAPS_OBJECT_MEMORY_FILE_DISCARD);
     DO_TEST("hugepages-memaccess", QEMU_CAPS_OBJECT_MEMORY_FILE,
             QEMU_CAPS_OBJECT_MEMORY_RAM, QEMU_CAPS_DEVICE_PC_DIMM,
             QEMU_CAPS_NUMA);
@@ -1167,6 +1174,12 @@ mymain(void)
     DO_TEST_PARSE_ERROR("disk-scsi-incompatible-address",
                         QEMU_CAPS_VIRTIO_SCSI);
 
+    DO_TEST("graphics-egl-headless",
+            QEMU_CAPS_EGL_HEADLESS,
+            QEMU_CAPS_DEVICE_CIRRUS_VGA);
+    DO_TEST_CAPS_LATEST("graphics-egl-headless");
+    DO_TEST_CAPS_LATEST("graphics-egl-headless-rendernode");
+
     DO_TEST("graphics-vnc", QEMU_CAPS_VNC, QEMU_CAPS_DEVICE_CIRRUS_VGA);
     DO_TEST("graphics-vnc-socket", QEMU_CAPS_VNC, QEMU_CAPS_DEVICE_CIRRUS_VGA);
     DO_TEST("graphics-vnc-websocket", QEMU_CAPS_VNC, QEMU_CAPS_VNC_WEBSOCKET,
@@ -1198,9 +1211,14 @@ mymain(void)
     driver.config->vncSASL = driver.config->vncTLSx509verify = driver.config->vncTLS = 0;
     VIR_FREE(driver.config->vncSASLdir);
     VIR_FREE(driver.config->vncTLSx509certdir);
+    DO_TEST("graphics-vnc-egl-headless",
+            QEMU_CAPS_VNC,
+            QEMU_CAPS_EGL_HEADLESS,
+            QEMU_CAPS_DEVICE_CIRRUS_VGA);
 
     DO_TEST("graphics-sdl",
             QEMU_CAPS_DEVICE_VGA);
+    DO_TEST_FAILURE("graphics-sdl-egl-headless", NONE);
     DO_TEST("graphics-sdl-fullscreen",
             QEMU_CAPS_DEVICE_CIRRUS_VGA);
     DO_TEST("graphics-spice",
@@ -1255,6 +1273,15 @@ mymain(void)
             QEMU_CAPS_SPICE_UNIX,
             QEMU_CAPS_DEVICE_CIRRUS_VGA);
     driver.config->spiceAutoUnixSocket = false;
+    DO_TEST("graphics-spice-egl-headless",
+            QEMU_CAPS_SPICE,
+            QEMU_CAPS_EGL_HEADLESS,
+            QEMU_CAPS_DEVICE_QXL);
+    DO_TEST_FAILURE("graphics-spice-invalid-egl-headless",
+                    QEMU_CAPS_SPICE,
+                    QEMU_CAPS_EGL_HEADLESS,
+                    QEMU_CAPS_DEVICE_QXL);
+    DO_TEST_CAPS_LATEST("graphics-spice-gl-auto-rendernode");
 
     DO_TEST("input-usbmouse", NONE);
     DO_TEST("input-usbtablet", NONE);
@@ -1266,7 +1293,7 @@ mymain(void)
     DO_TEST("misc-no-reboot", NONE);
     DO_TEST("misc-uuid", NONE);
     DO_TEST_PARSE_ERROR("vhost_queues-invalid", NONE);
-    DO_TEST("net-vhostuser", NONE);
+    DO_TEST("net-vhostuser", QEMU_CAPS_CHARDEV_FD_PASS);
     DO_TEST("net-vhostuser-multiq",
             QEMU_CAPS_VHOSTUSER_MULTIQUEUE);
     DO_TEST_FAILURE("net-vhostuser-multiq", NONE);
@@ -1296,6 +1323,8 @@ mymain(void)
     DO_TEST("net-mcast", NONE);
     DO_TEST("net-udp", NONE);
     DO_TEST("net-hostdev", NONE);
+    DO_TEST("net-hostdev-bootorder",
+            QEMU_CAPS_BOOTINDEX, QEMU_CAPS_PCI_BOOTINDEX);
     DO_TEST("net-hostdev-multidomain", NONE);
     DO_TEST("net-hostdev-vfio",
             QEMU_CAPS_DEVICE_VFIO_PCI);
@@ -1335,6 +1364,8 @@ mymain(void)
             QEMU_CAPS_CHARDEV_FILE_APPEND);
     DO_TEST("serial-unix-chardev",
             QEMU_CAPS_DEVICE_ISA_SERIAL);
+    DO_TEST_CAPS_LATEST("serial-unix-chardev");
+    DO_TEST_PARSE_ERROR("serial-unix-missing-source", NONE);
     DO_TEST("serial-tcp-chardev",
             QEMU_CAPS_DEVICE_ISA_SERIAL);
     DO_TEST("serial-udp-chardev",
@@ -1375,6 +1406,8 @@ mymain(void)
             QEMU_CAPS_DEVICE_PCI_SERIAL);
 
     DO_TEST("channel-guestfwd", NONE);
+    DO_TEST_CAPS_VER("channel-unix-guestfwd", "2.5.0");
+    DO_TEST_CAPS_LATEST("channel-unix-guestfwd");
     DO_TEST("channel-virtio", NONE);
     DO_TEST("channel-virtio-state", NONE);
     DO_TEST("channel-virtio-auto", NONE);
@@ -1573,6 +1606,13 @@ mymain(void)
             QEMU_CAPS_DEVICE_VFIO_PCI);
     DO_TEST_PARSE_ERROR("hostdev-mdev-invalid-target-address",
             QEMU_CAPS_DEVICE_VFIO_PCI);
+    DO_TEST_CAPS_LATEST("hostdev-mdev-display-spice-opengl");
+    DO_TEST_CAPS_LATEST("hostdev-mdev-display-spice-egl-headless");
+    DO_TEST_CAPS_LATEST("hostdev-mdev-display-vnc");
+    DO_TEST_CAPS_LATEST("hostdev-mdev-display-vnc-egl-headless");
+    DO_TEST_PARSE_ERROR("hostdev-mdev-display-missing-graphics",
+            QEMU_CAPS_DEVICE_VFIO_PCI,
+            QEMU_CAPS_VFIO_PCI_DISPLAY);
     DO_TEST("pci-rom", NONE);
     DO_TEST("pci-rom-disabled", NONE);
     DO_TEST("pci-rom-disabled-invalid", NONE);
@@ -1850,6 +1890,7 @@ mymain(void)
     DO_TEST("pseries-features",
             QEMU_CAPS_DEVICE_SPAPR_PCI_HOST_BRIDGE,
             QEMU_CAPS_MACHINE_PSERIES_CAP_HPT_MAX_PAGE_SIZE,
+            QEMU_CAPS_MACHINE_PSERIES_CAP_HTM,
             QEMU_CAPS_MACHINE_PSERIES_RESIZE_HPT);
     DO_TEST_FAILURE("pseries-features",
                     QEMU_CAPS_DEVICE_SPAPR_PCI_HOST_BRIDGE);
@@ -1972,7 +2013,9 @@ mymain(void)
             QEMU_CAPS_DEVICE_VIRTIO_VGA,
             QEMU_CAPS_DEVICE_VIDEO_PRIMARY,
             QEMU_CAPS_VIRTIO_GPU_MAX_OUTPUTS);
-    DO_TEST_PARSE_ERROR("video-invalid", NONE);
+    DO_TEST("video-none-device",
+            QEMU_CAPS_VNC);
+    DO_TEST_PARSE_ERROR("video-invalid-multiple-devices", NONE);
 
     DO_TEST("virtio-rng-default",
             QEMU_CAPS_DEVICE_VIRTIO_RNG,
@@ -2914,9 +2957,7 @@ mymain(void)
     DO_TEST_CAPS_LATEST("vhost-vsock");
     DO_TEST_CAPS_LATEST("vhost-vsock-auto");
 
-    DO_TEST("launch-security-sev",
-            QEMU_CAPS_KVM,
-            QEMU_CAPS_SEV_GUEST);
+    DO_TEST_CAPS_VER("launch-security-sev", "2.12.0");
 
     if (getenv("LIBVIRT_SKIP_CLEANUP") == NULL)
         virFileDeleteTree(fakerootdir);

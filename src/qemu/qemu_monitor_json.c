@@ -91,6 +91,7 @@ static void qemuMonitorJSONHandleMigrationPass(qemuMonitorPtr mon, virJSONValueP
 static void qemuMonitorJSONHandleAcpiOstInfo(qemuMonitorPtr mon, virJSONValuePtr data);
 static void qemuMonitorJSONHandleBlockThreshold(qemuMonitorPtr mon, virJSONValuePtr data);
 static void qemuMonitorJSONHandleDumpCompleted(qemuMonitorPtr mon, virJSONValuePtr data);
+static void qemuMonitorJSONHandlePRManagerStatusChanged(qemuMonitorPtr mon, virJSONValuePtr data);
 
 typedef struct {
     const char *type;
@@ -113,6 +114,7 @@ static qemuEventHandler eventHandlers[] = {
     { "MIGRATION_PASS", qemuMonitorJSONHandleMigrationPass, },
     { "NIC_RX_FILTER_CHANGED", qemuMonitorJSONHandleNicRxFilterChanged, },
     { "POWERDOWN", qemuMonitorJSONHandlePowerdown, },
+    { "PR_MANAGER_STATUS_CHANGED", qemuMonitorJSONHandlePRManagerStatusChanged, },
     { "RESET", qemuMonitorJSONHandleReset, },
     { "RESUME", qemuMonitorJSONHandleResume, },
     { "RTC_CHANGE", qemuMonitorJSONHandleRTCChange, },
@@ -740,7 +742,7 @@ qemuMonitorJSONHandleIOError(qemuMonitorPtr mon, virJSONValuePtr data)
 {
     const char *device;
     const char *action;
-    const char *reason = "";
+    const char *reason;
     bool nospc = false;
     int actionID;
 
@@ -756,8 +758,14 @@ qemuMonitorJSONHandleIOError(qemuMonitorPtr mon, virJSONValuePtr data)
     if ((device = virJSONValueObjectGetString(data, "device")) == NULL)
         VIR_WARN("missing device in disk io error event");
 
-    if (virJSONValueObjectGetBoolean(data, "nospace", &nospc) == 0 && nospc)
-        reason = "enospc";
+    reason = virJSONValueObjectGetString(data, "__com.redhat_reason");
+    if (!reason) {
+        if (virJSONValueObjectGetBoolean(data, "nospace", &nospc) != 0) {
+            VIR_WARN("neither __com.redhat_reason nor nospace found in disk "
+                     "io error event");
+        }
+        reason = nospc ? "enospc" : "";
+    }
 
     if ((actionID = qemuMonitorIOErrorActionTypeFromString(action)) < 0) {
         VIR_WARN("unknown disk io error action '%s'", action);
@@ -1294,6 +1302,27 @@ qemuMonitorJSONHandleDumpCompleted(qemuMonitorPtr mon,
     error = virJSONValueObjectGetString(data, "error");
 
     qemuMonitorEmitDumpCompleted(mon, status, &stats, error);
+}
+
+
+static void qemuMonitorJSONHandlePRManagerStatusChanged(qemuMonitorPtr mon,
+                                                        virJSONValuePtr data)
+{
+    const char *name;
+    bool connected;
+
+    if (!(name = virJSONValueObjectGetString(data, "id"))) {
+        VIR_WARN("missing pr-manager alias in PR_MANAGER_STATUS_CHANGED event");
+        return;
+    }
+
+    if (virJSONValueObjectGetBoolean(data, "connected", &connected) < 0) {
+        VIR_WARN("missing connected state for %s "
+                 "in PR_MANAGER_STATUS_CHANGED event", name);
+        return;
+    }
+
+    qemuMonitorEmitPRManagerStatusChanged(mon, name, connected);
 }
 
 
@@ -2071,6 +2100,8 @@ int qemuMonitorJSONGetMemoryStats(qemuMonitorPtr mon,
                       VIR_DOMAIN_MEMORY_STAT_USABLE, 1024);
     GET_BALLOON_STATS(data, "last-update",
                       VIR_DOMAIN_MEMORY_STAT_LAST_UPDATE, 1);
+    GET_BALLOON_STATS(statsdata, "stat-disk-caches",
+                      VIR_DOMAIN_MEMORY_STAT_DISK_CACHES, 1024);
     ret = got;
  cleanup:
     virJSONValueFree(cmd);
@@ -4055,6 +4086,113 @@ int qemuMonitorJSONDelObject(qemuMonitorPtr mon,
 }
 
 
+int qemuMonitorJSONAddDrive(qemuMonitorPtr mon,
+                            const char *drivestr)
+{
+    int ret = -1;
+    virJSONValuePtr cmd;
+    virJSONValuePtr reply = NULL;
+    virJSONValuePtr args;
+
+    cmd = qemuMonitorJSONMakeCommand("__com.redhat_drive_add",
+                                     NULL);
+    if (!cmd)
+        return -1;
+
+    args = qemuMonitorJSONKeywordStringToJSON(drivestr, "type");
+    if (!args)
+        goto cleanup;
+
+    /* __com.redhat_drive_add rejects the 'if' key */
+    virJSONValueObjectRemoveKey(args, "if", NULL);
+
+    if (virJSONValueObjectAppend(cmd, "arguments", args) < 0) {
+        virReportOOMError();
+        goto cleanup;
+    }
+    args = NULL; /* cmd owns reference to args now */
+
+    if ((ret = qemuMonitorJSONCommand(mon, cmd, &reply)) < 0)
+        goto cleanup;
+
+    if (qemuMonitorJSONHasError(reply, "CommandNotFound")) {
+        virJSONValueFree(cmd);
+        virJSONValueFree(reply);
+        cmd = reply = NULL;
+
+        VIR_DEBUG("__com.redhat_drive_add command not found,"
+                  " trying upstream way");
+    } else {
+        ret = qemuMonitorJSONCheckError(cmd, reply);
+        goto cleanup;
+    }
+
+    /* Upstream approach */
+    /* there won't be a direct replacement for drive_add in QMP */
+    ret = qemuMonitorTextAddDrive(mon, drivestr);
+
+ cleanup:
+    virJSONValueFree(args);
+    virJSONValueFree(cmd);
+    virJSONValueFree(reply);
+    return ret;
+}
+
+
+int qemuMonitorJSONDriveDel(qemuMonitorPtr mon,
+                            const char *drivestr)
+{
+    int ret;
+    virJSONValuePtr cmd;
+    virJSONValuePtr reply = NULL;
+
+    VIR_DEBUG("drivestr=%s", drivestr);
+    cmd = qemuMonitorJSONMakeCommand("__com.redhat_drive_del",
+                                     "s:id", drivestr,
+                                     NULL);
+    if (!cmd)
+        return -1;
+
+    if ((ret = qemuMonitorJSONCommand(mon, cmd, &reply)) < 0)
+        goto cleanup;
+
+    if (qemuMonitorJSONHasError(reply, "CommandNotFound")) {
+        virJSONValueFree(cmd);
+        virJSONValueFree(reply);
+        cmd = reply = NULL;
+
+        VIR_DEBUG("__com.redhat_drive_del command not found,"
+                  " trying upstream way");
+    } else if (qemuMonitorJSONHasError(reply, "DeviceNotFound")) {
+        /* NB: device not found errors mean the drive was
+         * auto-deleted and we ignore the error */
+        ret = 0;
+        goto cleanup;
+    } else {
+        ret = qemuMonitorJSONCheckError(cmd, reply);
+        goto cleanup;
+    }
+
+    /* Upstream approach */
+    /* there won't be a direct replacement for drive_del in QMP */
+    if ((ret = qemuMonitorTextDriveDel(mon, drivestr)) < 0) {
+        virErrorPtr err = virGetLastError();
+        if (err && err->code == VIR_ERR_OPERATION_UNSUPPORTED) {
+            VIR_ERROR("%s",
+                      _("deleting disk is not supported.  "
+                        "This may leak data if disk is reassigned"));
+            ret = 1;
+            virResetLastError();
+        }
+    }
+
+ cleanup:
+    virJSONValueFree(cmd);
+    virJSONValueFree(reply);
+    return ret;
+}
+
+
 int
 qemuMonitorJSONDiskSnapshot(qemuMonitorPtr mon, virJSONValuePtr actions,
                             const char *device, const char *file,
@@ -4478,6 +4616,30 @@ int qemuMonitorJSONSendKey(qemuMonitorPtr mon,
     virJSONValueFree(reply);
     virJSONValueFree(keys);
     virJSONValueFree(key);
+    return ret;
+}
+
+int qemuMonitorJSONScreendumpRH(qemuMonitorPtr mon,
+                                const char *id,
+                                const char *file)
+{
+    int ret = -1;
+    virJSONValuePtr cmd, reply = NULL;
+
+    cmd = qemuMonitorJSONMakeCommand("__com.redhat_qxl_screendump",
+                                     "s:filename", file,
+                                     "s:id", id,
+                                     NULL);
+    if (!cmd)
+        return -1;
+
+    ret = qemuMonitorJSONCommand(mon, cmd, &reply);
+
+    if (ret == 0)
+        ret = qemuMonitorJSONCheckError(cmd, reply);
+
+    virJSONValueFree(cmd);
+    virJSONValueFree(reply);
     return ret;
 }
 
@@ -6402,6 +6564,20 @@ qemuMonitorJSONGetGICCapabilities(qemuMonitorPtr mon,
 }
 
 
+/**
+ * qemuMonitorJSONGetSEVCapabilities:
+ * @mon: qemu monitor object
+ * @capabilities: pointer to pointer to a SEV capability structure to be filled
+ *
+ * This function queries and fills in AMD's SEV platform-specific data.
+ * Note that from QEMU's POV both -object sev-guest and query-sev-capabilities
+ * can be present even if SEV is not available, which basically leaves us with
+ * checking for JSON "GenericError" in order to differentiate between
+ * compiled-in support and actual SEV support on the platform.
+ *
+ * Returns -1 on error, 0 if SEV is not supported, and 1 if SEV is supported on
+ * the platform.
+ */
 int
 qemuMonitorJSONGetSEVCapabilities(qemuMonitorPtr mon,
                                   virSEVCapability **capabilities)
@@ -6423,8 +6599,7 @@ qemuMonitorJSONGetSEVCapabilities(qemuMonitorPtr mon,
     if (qemuMonitorJSONCommand(mon, cmd, &reply) < 0)
         goto cleanup;
 
-    /* Both -object sev-guest and query-sev-capabilities can be present
-     * even if SEV is not available */
+    /* QEMU has only compiled-in support of SEV */
     if (qemuMonitorJSONHasError(reply, "GenericError")) {
         ret = 0;
         goto cleanup;
@@ -6476,8 +6651,7 @@ qemuMonitorJSONGetSEVCapabilities(qemuMonitorPtr mon,
     capability->cbitpos = cbitpos;
     capability->reduced_phys_bits = reduced_phys_bits;
     VIR_STEAL_PTR(*capabilities, capability);
-    ret = 0;
-
+    ret = 1;
  cleanup:
     virSEVCapabilitiesFree(capability);
     virJSONValueFree(cmd);
@@ -8041,4 +8215,83 @@ qemuMonitorJSONGetSEVMeasurement(qemuMonitorPtr mon)
     virJSONValueFree(cmd);
     virJSONValueFree(reply);
     return measurement;
+}
+
+
+/*
+ * Example return data
+ *
+ * "return": [
+ *   { "connected": true, "id": "pr-helper0" }
+ *  ]
+ */
+static int
+qemuMonitorJSONExtractPRManagerInfo(virJSONValuePtr reply,
+                                    virHashTablePtr info)
+{
+    qemuMonitorPRManagerInfoPtr entry = NULL;
+    virJSONValuePtr data;
+    int ret = -1;
+    size_t i;
+
+    data = virJSONValueObjectGetArray(reply, "return");
+
+    for (i = 0; i < virJSONValueArraySize(data); i++) {
+        virJSONValuePtr prManager = virJSONValueArrayGet(data, i);
+        const char *alias;
+
+        if (!(alias = virJSONValueObjectGetString(prManager, "id")))
+            goto malformed;
+
+        if (VIR_ALLOC(entry) < 0)
+            goto cleanup;
+
+        if (virJSONValueObjectGetBoolean(prManager,
+                                         "connected",
+                                         &entry->connected) < 0) {
+            goto malformed;
+        }
+
+        if (virHashAddEntry(info, alias, entry) < 0)
+            goto cleanup;
+
+        entry = NULL;
+    }
+
+    ret = 0;
+ cleanup:
+    VIR_FREE(entry);
+    return ret;
+
+ malformed:
+    virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                   _("malformed prManager reply"));
+    goto cleanup;
+}
+
+
+int
+qemuMonitorJSONGetPRManagerInfo(qemuMonitorPtr mon,
+                                virHashTablePtr info)
+{
+    int ret = -1;
+    virJSONValuePtr cmd;
+    virJSONValuePtr reply = NULL;
+
+    if (!(cmd = qemuMonitorJSONMakeCommand("query-pr-managers",
+                                           NULL)))
+        return -1;
+
+    if (qemuMonitorJSONCommand(mon, cmd, &reply) < 0)
+        goto cleanup;
+
+    if (qemuMonitorJSONCheckReply(cmd, reply, VIR_JSON_TYPE_ARRAY) < 0)
+        goto cleanup;
+
+    ret = qemuMonitorJSONExtractPRManagerInfo(reply, info);
+ cleanup:
+    virJSONValueFree(cmd);
+    virJSONValueFree(reply);
+    return ret;
+
 }

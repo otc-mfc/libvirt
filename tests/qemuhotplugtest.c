@@ -149,16 +149,10 @@ testQemuHotplugDetach(virDomainObjPtr vm,
 
     switch (dev->type) {
     case VIR_DOMAIN_DEVICE_DISK:
-        ret = qemuDomainDetachDeviceDiskLive(&driver, vm, dev, async);
-        break;
     case VIR_DOMAIN_DEVICE_CHR:
-        ret = qemuDomainDetachChrDevice(&driver, vm, dev->data.chr, async);
-        break;
     case VIR_DOMAIN_DEVICE_SHMEM:
-        ret = qemuDomainDetachShmemDevice(&driver, vm, dev->data.shmem, async);
-        break;
     case VIR_DOMAIN_DEVICE_WATCHDOG:
-        ret = qemuDomainDetachWatchdog(&driver, vm, dev->data.watchdog, async);
+        ret = qemuDomainDetachDeviceLive(vm, dev, &driver, async);
         break;
     default:
         VIR_TEST_VERBOSE("device type '%s' cannot be detached\n",
@@ -278,7 +272,7 @@ testQemuHotplug(const void *data)
         device_parse_flags = VIR_DOMAIN_DEF_PARSE_INACTIVE;
 
     if (!(dev = virDomainDeviceDefParse(device_xml, vm->def,
-                                        caps, driver.xmlopt,
+                                        caps, driver.xmlopt, NULL,
                                         device_parse_flags)))
         goto cleanup;
 
@@ -431,7 +425,7 @@ testQemuHotplugCpuPrepare(const char *test,
 
     /* create vm->newDef */
     data->vm->persistent = true;
-    if (virDomainObjSetDefTransient(caps, driver.xmlopt, data->vm) < 0)
+    if (virDomainObjSetDefTransient(caps, driver.xmlopt, data->vm, NULL) < 0)
         goto error;
 
     priv = data->vm->privateData;
@@ -665,6 +659,14 @@ mymain(void)
     "    }" \
     "}\r\n"
 
+#define QMP_NOT_FOUND \
+    "{" \
+    "    \"error\": {" \
+    "        \"class\": \"CommandNotFound\"," \
+    "        \"desc\": \"The command has not been found\"" \
+    "    }" \
+    "}"
+
     DO_TEST_UPDATE("graphics-spice", "graphics-spice-nochange", false, false, NULL);
     DO_TEST_UPDATE("graphics-spice-timeout", "graphics-spice-timeout-nochange", false, false,
                    "set_password", QMP_OK, "expire_password", QMP_OK);
@@ -685,55 +687,121 @@ mymain(void)
                    "chardev-remove", QMP_OK);
 
     DO_TEST_ATTACH("base-live", "disk-virtio", false, true,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
     DO_TEST_DETACH("base-live", "disk-virtio", false, false,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
+    DO_TEST_ATTACH("base-live", "disk-virtio", false, true,
+                   "__com.redhat_drive_add", QMP_OK,
+                   "device_add", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-virtio", false, false,
+                   "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
+
     DO_TEST_ATTACH_EVENT("base-live", "disk-virtio", false, true,
+                         "__com.redhat_drive_add", QMP_NOT_FOUND,
                          "human-monitor-command", HMP("OK\\r\\n"),
                          "device_add", QMP_OK);
     DO_TEST_DETACH("base-live", "disk-virtio", true, true,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
     DO_TEST_DETACH("base-live", "disk-virtio", false, false,
                    "device_del", QMP_DEVICE_DELETED("virtio-disk4") QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
+    DO_TEST_ATTACH_EVENT("base-live", "disk-virtio", false, true,
+                         "__com.redhat_drive_add", QMP_OK,
+                         "device_add", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-virtio", true, true,
+                   "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-virtio", false, false,
+                   "device_del", QMP_DEVICE_DELETED("virtio-disk4") QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
+
     DO_TEST_ATTACH("base-live", "disk-usb", false, true,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
     DO_TEST_DETACH("base-live", "disk-usb", false, false,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
+    DO_TEST_ATTACH("base-live", "disk-usb", false, true,
+                   "__com.redhat_drive_add", QMP_OK,
+                   "device_add", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-usb", false, false,
+                   "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
+
     DO_TEST_ATTACH_EVENT("base-live", "disk-usb", false, true,
+                         "__com.redhat_drive_add", QMP_NOT_FOUND,
                          "human-monitor-command", HMP("OK\\r\\n"),
                          "device_add", QMP_OK);
     DO_TEST_DETACH("base-live", "disk-usb", true, true,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
     DO_TEST_DETACH("base-live", "disk-usb", false, false,
                    "device_del", QMP_DEVICE_DELETED("usb-disk16") QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
+    DO_TEST_ATTACH_EVENT("base-live", "disk-usb", false, true,
+                         "__com.redhat_drive_add", QMP_OK,
+                         "device_add", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-usb", true, true,
+                   "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-usb", false, false,
+                   "device_del", QMP_DEVICE_DELETED("usb-disk16") QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
+
     DO_TEST_ATTACH("base-live", "disk-scsi", false, true,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
     DO_TEST_DETACH("base-live", "disk-scsi", false, false,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
+    DO_TEST_ATTACH("base-live", "disk-scsi", false, true,
+                   "__com.redhat_drive_add", QMP_OK,
+                   "device_add", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-scsi", false, false,
+                   "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
+
     DO_TEST_ATTACH_EVENT("base-live", "disk-scsi", false, true,
+                         "__com.redhat_drive_add", QMP_NOT_FOUND,
                          "human-monitor-command", HMP("OK\\r\\n"),
                          "device_add", QMP_OK);
     DO_TEST_DETACH("base-live", "disk-scsi", true, true,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
     DO_TEST_DETACH("base-live", "disk-scsi", false, false,
                    "device_del", QMP_DEVICE_DELETED("scsi0-0-0-5") QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
+
+    DO_TEST_ATTACH_EVENT("base-live", "disk-scsi", false, true,
+                         "__com.redhat_drive_add", QMP_OK,
+                         "device_add", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-scsi", true, true,
+                   "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
+    DO_TEST_DETACH("base-live", "disk-scsi", false, false,
+                   "device_del", QMP_DEVICE_DELETED("scsi0-0-0-5") QMP_OK,
+                   "__com.redhat_drive_del", QMP_OK);
 
     DO_TEST_ATTACH("base-without-scsi-controller-live", "disk-scsi-2", false, true,
                    /* Four controllers added */
@@ -741,11 +809,13 @@ mymain(void)
                    "device_add", QMP_OK,
                    "device_add", QMP_OK,
                    "device_add", QMP_OK,
-                   "human-monitor-command", HMP("OK\\r\\n"),
                    /* Disk added */
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
+                   "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
     DO_TEST_DETACH("base-with-scsi-controller-live", "disk-scsi-2", false, false,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
     DO_TEST_ATTACH_EVENT("base-without-scsi-controller-live", "disk-scsi-2", false, true,
@@ -754,14 +824,17 @@ mymain(void)
                          "device_add", QMP_OK,
                          "device_add", QMP_OK,
                          "device_add", QMP_OK,
-                         "human-monitor-command", HMP("OK\\r\\n"),
                          /* Disk added */
+                         "__com.redhat_drive_add", QMP_NOT_FOUND,
+                         "human-monitor-command", HMP("OK\\r\\n"),
                          "device_add", QMP_OK);
     DO_TEST_DETACH("base-with-scsi-controller-live", "disk-scsi-2", true, true,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
     DO_TEST_DETACH("base-with-scsi-controller-live", "disk-scsi-2", false, false,
-                   "device_del", QMP_DEVICE_DELETED("scsi3-0-5-7") QMP_OK,
+                   "device_del", QMP_DEVICE_DELETED("scsi3-0-5-6") QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
     DO_TEST_ATTACH("base-live", "qemu-agent", false, true,
@@ -772,38 +845,47 @@ mymain(void)
                    "chardev-remove", QMP_OK);
 
     DO_TEST_ATTACH("base-ccw-live", "ccw-virtio", false, true,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
     DO_TEST_DETACH("base-ccw-live", "ccw-virtio", false, false,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
     DO_TEST_ATTACH("base-ccw-live-with-ccw-virtio", "ccw-virtio-2", false, true,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
 
     DO_TEST_DETACH("base-ccw-live-with-ccw-virtio", "ccw-virtio-2", false, false,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
     DO_TEST_ATTACH("base-ccw-live-with-ccw-virtio", "ccw-virtio-2-explicit", false, true,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
 
     DO_TEST_DETACH("base-ccw-live-with-ccw-virtio", "ccw-virtio-2-explicit", false, false,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
     /* Attach a second device, then detach the first one. Then attach the first one again. */
     DO_TEST_ATTACH("base-ccw-live-with-ccw-virtio", "ccw-virtio-2-explicit", false, true,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
 
     DO_TEST_DETACH("base-ccw-live-with-2-ccw-virtio", "ccw-virtio-1-explicit", false, true,
                    "device_del", QMP_OK,
+                   "__com.redhat_drive_del", QMP_NOT_FOUND,
                    "human-monitor-command", HMP(""));
 
     DO_TEST_ATTACH("base-ccw-live-with-2-ccw-virtio", "ccw-virtio-1-reverse", false, false,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
 
@@ -821,6 +903,7 @@ mymain(void)
                    "object-del", QMP_OK);
     DO_TEST_ATTACH("base-live+disk-scsi-wwn",
                    "disk-scsi-duplicate-wwn", false, false,
+                   "__com.redhat_drive_add", QMP_NOT_FOUND,
                    "human-monitor-command", HMP("OK\\r\\n"),
                    "device_add", QMP_OK);
 
@@ -835,6 +918,12 @@ mymain(void)
                    "device_add", QMP_OK);
     DO_TEST_DETACH("base-live", "watchdog-user-alias-full", false, false,
                    "device_del", QMP_OK);
+
+    DO_TEST_ATTACH("base-live", "guestfwd", false, true,
+                   "chardev-add", QMP_OK,
+                   "netdev_add", QMP_OK);
+    DO_TEST_DETACH("base-live", "guestfwd", false, false,
+                   "netdev_del", QMP_OK);
 
 #define DO_TEST_CPU_GROUP(prefix, vcpus, modernhp, expectfail) \
     do { \

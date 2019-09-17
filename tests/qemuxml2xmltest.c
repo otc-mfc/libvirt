@@ -330,14 +330,17 @@ mymain(void)
     DO_TEST("pmu-feature", NONE);
     DO_TEST("pmu-feature-off", NONE);
 
-    DO_TEST("hugepages", NONE);
-    DO_TEST("hugepages-pages", NONE);
-    DO_TEST("hugepages-pages2", NONE);
-    DO_TEST("hugepages-pages3", NONE);
-    DO_TEST("hugepages-pages4", NONE);
-    DO_TEST("hugepages-pages5", NONE);
-    DO_TEST("hugepages-pages6", NONE);
-    DO_TEST("hugepages-pages7", NONE);
+    DO_TEST("pages-discard", NONE);
+    DO_TEST("pages-discard-hugepages", NONE);
+    DO_TEST("pages-dimm-discard", NONE);
+    DO_TEST("hugepages-default", NONE);
+    DO_TEST("hugepages-default-2M", NONE);
+    DO_TEST("hugepages-default-system-size", NONE);
+    DO_TEST("hugepages-nodeset", NONE);
+    DO_TEST("hugepages-numa-default-2M", NONE);
+    DO_TEST("hugepages-numa-default-dimm", NONE);
+    DO_TEST("hugepages-numa-nodeset", NONE);
+    DO_TEST("hugepages-numa-nodeset-part", NONE);
     DO_TEST("hugepages-shared", NONE);
     DO_TEST("hugepages-memaccess", NONE);
     DO_TEST("hugepages-memaccess2", NONE);
@@ -417,6 +420,7 @@ mymain(void)
     cfg->vncAutoUnixSocket = false;
     DO_TEST("graphics-vnc-socket", NONE);
     DO_TEST("graphics-vnc-auto-socket", NONE);
+    DO_TEST("graphics-vnc-egl-headless", NONE);
 
     DO_TEST("graphics-sdl", NONE);
     DO_TEST("graphics-sdl-fullscreen", NONE);
@@ -428,6 +432,9 @@ mymain(void)
     cfg->spiceAutoUnixSocket = true;
     DO_TEST("graphics-spice-auto-socket-cfg", NONE);
     cfg->spiceAutoUnixSocket = false;
+    DO_TEST("graphics-spice-egl-headless", NONE);
+
+    DO_TEST("graphics-egl-headless-rendernode", NONE);
 
     DO_TEST("input-usbmouse", NONE);
     DO_TEST("input-usbtablet", NONE);
@@ -449,6 +456,8 @@ mymain(void)
     DO_TEST("net-virtio-network-portgroup", NONE);
     DO_TEST("net-virtio-rxtxqueuesize", NONE);
     DO_TEST("net-hostdev", NONE);
+    DO_TEST("net-hostdev-bootorder",
+            QEMU_CAPS_BOOTINDEX, QEMU_CAPS_PCI_BOOTINDEX);
     DO_TEST("net-hostdev-vfio", NONE);
     DO_TEST("net-midonet", NONE);
     DO_TEST("net-openvswitch", NONE);
@@ -477,6 +486,7 @@ mymain(void)
     DO_TEST("hostdev-pci-address", NONE);
     DO_TEST("hostdev-vfio", NONE);
     DO_TEST("hostdev-mdev-precreated", NONE);
+    DO_TEST("hostdev-mdev-display", QEMU_CAPS_VFIO_PCI_DISPLAY);
     DO_TEST("pci-rom", NONE);
     DO_TEST("pci-rom-disabled", NONE);
     DO_TEST("pci-rom-disabled-invalid", NONE);
@@ -620,6 +630,7 @@ mymain(void)
     DO_TEST("pseries-features",
             QEMU_CAPS_DEVICE_SPAPR_PCI_HOST_BRIDGE,
             QEMU_CAPS_MACHINE_PSERIES_CAP_HPT_MAX_PAGE_SIZE,
+            QEMU_CAPS_MACHINE_PSERIES_CAP_HTM,
             QEMU_CAPS_MACHINE_PSERIES_RESIZE_HPT);
 
     DO_TEST("pseries-serial-native",
@@ -1141,6 +1152,7 @@ mymain(void)
             QEMU_CAPS_VIRTIO_GPU_MAX_OUTPUTS,
             QEMU_CAPS_VNC,
             QEMU_CAPS_DEVICE_VIRTIO_GPU_CCW);
+    DO_TEST("video-none-device", NONE);
 
     DO_TEST("intel-iommu",
             QEMU_CAPS_DEVICE_INTEL_IOMMU);

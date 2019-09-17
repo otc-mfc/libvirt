@@ -30,6 +30,7 @@
 # include "virbitmap.h"
 # include "virarch.h"
 # include "numa_conf.h"
+# include "virhostcpu.h"
 
 # define VIR_CPU_VENDOR_ID_LENGTH 12
 
@@ -141,6 +142,7 @@ struct _virCPUDef {
     size_t nfeatures_max;
     virCPUFeatureDefPtr features;
     virCPUCacheDefPtr cache;
+    virHostCPUTscInfoPtr tsc;
 };
 
 
