@@ -138,6 +138,8 @@ EXTRA_DIST = \
 	securityselinuxhelperdata \
 	securityselinuxlabeldata \
 	sexpr2xmldata \
+	sretestdata \
+	sretestdataout \
 	storagepoolschemadata \
 	storagepoolxml2xmlin \
 	storagepoolxml2xmlout \
@@ -324,6 +326,10 @@ endif WITH_VMX
 if WITH_VMWARE
 test_programs += vmwarevertest
 endif WITH_VMWARE
+
+if WITH_SRE
+test_programs += sretest
+endif WITH_SRE
 
 if WITH_BHYVE
 test_programs += bhyvexml2argvtest bhyvexml2xmltest bhyveargv2xmltest
@@ -773,6 +779,24 @@ else ! WITH_VMWARE
 EXTRA_DIST += vmwarevertest.c
 endif ! WITH_VMWARE
 
+if WITH_SRE
+sre_LDADDS = ../src/libvirt_driver_sre_impl.la
+if WITH_NETWORK
+sre_LDADDS += ../src/libvirt_driver_network_impl.la
+endif WITH_NETWORK
+sre_LDADDS += $(LDADDS)
+sretest_SOURCES = \
+    testutilssre.c testutilssre.h \
+    testutilssredriver.c testutilssredriver.h \
+        testutilssremonitor.c testutilssremonitor.h \
+    testutils.c testutils.h \
+    sretest.c 
+sretest_LDADD = $(sre_LDADDS)
+# else ! WITH_SRE
+# EXTRA_DIST += sretest.c testutilssre.c testutilssre.h \
+#     testutilssredriver.c testutilssredriver.h 
+endif WITH_SRE
+
 if WITH_BHYVE
 bhyvexml2argvmock_la_SOURCES = \
 	bhyvexml2argvmock.c
@@ -989,6 +1013,9 @@ virkmodtest_LDADD = $(LDADDS)
 
 vircapstest_SOURCES = \
 	vircapstest.c testutils.h testutils.c
+if WITH_SRE
+vircapstest_SOURCES += testutilssre.c testutilssre.h
+endif WITH_SRE
 if WITH_LXC
 vircapstest_SOURCES += testutilslxc.c testutilslxc.h
 endif WITH_LXC

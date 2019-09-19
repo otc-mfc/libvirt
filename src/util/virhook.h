@@ -32,6 +32,7 @@ typedef enum {
     VIR_HOOK_DRIVER_LXC,               /* LXC domains related events */
     VIR_HOOK_DRIVER_NETWORK,           /* network related events */
     VIR_HOOK_DRIVER_LIBXL,             /* Xen libxl domains related events */
+    VIR_HOOK_DRIVER_SRE,               /* SRE domains related events */
 
     VIR_HOOK_DRIVER_LAST,
 } virHookDriverType;
@@ -76,6 +77,17 @@ typedef enum {
 
     VIR_HOOK_LXC_OP_LAST,
 } virHookLxcOpType;
+
+typedef enum {
+    VIR_HOOK_SRE_OP_START,            /* domain is about to start */
+    VIR_HOOK_SRE_OP_STOPPED,          /* domain has stopped */
+    VIR_HOOK_SRE_OP_PREPARE,          /* domain startup initiated */
+    VIR_HOOK_SRE_OP_RELEASE,          /* domain destruction is over */
+    VIR_HOOK_SRE_OP_STARTED,          /* domain has started */
+    VIR_HOOK_SRE_OP_RECONNECT,        /* domain is being reconnected by libvirt */
+
+    VIR_HOOK_SRE_OP_LAST,
+} virHookSreOpType;
 
 typedef enum {
     VIR_HOOK_NETWORK_OP_START,          /* network is about to start */

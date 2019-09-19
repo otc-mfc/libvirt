@@ -1748,6 +1748,94 @@ virPCIGetAddrString(unsigned int domain,
     virPCIDeviceFree(dev);
     return ret;
 }
+/* sre: scan dom0 pci tree for passthrough network devices */
+virPCIDeviceListPtr
+virPCIDeviceCreateListScanHostPCI(void)
+{
+    virPCIDeviceListPtr list = virPCIDeviceListNew();
+    virPCIDevicePtr ptr = NULL;
+    int bus = 0, dev= 0, func = 0;
+    /* 8086 1503 */
+    for (bus = 0; bus < 0xff; bus++ ) {
+        for (dev = 0; dev < 0x20; dev++ ) {
+            for (func = 0; func < 0x8; func++ ) {
+                if ((ptr = virPCIDeviceNewQuiet(0,bus,dev,func)))  {
+                    if (virPCIDeviceListAdd(list,ptr)) {
+                        virReportSystemError(errno,
+                                         _("Device list error %s is already in the list"),
+                                         ptr->name);
+                    }
+                }
+            }
+        }
+   }
+   return list;
+}
+
+virPCIDevicePtr
+virPCIDeviceNewQuiet(unsigned int domain,
+                unsigned int bus,
+                unsigned int slot,
+                unsigned int function)
+{
+    virPCIDevicePtr dev;
+    char *vendor = NULL;
+    char *product = NULL;
+
+    if (VIR_ALLOC(dev) < 0)
+        return NULL;
+
+    dev->address.domain = domain;
+    dev->address.bus = bus;
+    dev->address.slot = slot;
+    dev->address.function = function;
+
+    if (snprintf(dev->name, sizeof(dev->name), "%.4x:%.2x:%.2x.%.1x",
+                 domain, bus, slot, function) >= sizeof(dev->name)) {
+        virReportError(VIR_ERR_INTERNAL_ERROR,
+                       _("dev->name buffer overflow: %.4x:%.2x:%.2x.%.1x"),
+                       domain, bus, slot, function);
+        goto error;
+    }
+    if (virAsprintf(&dev->path, PCI_SYSFS "devices/%s/config",
+                    dev->name) < 0)
+        goto error;
+
+    if (!virFileExists(dev->path)) {
+        goto error;
+    }
+
+    vendor  = virPCIDeviceReadID(dev, "vendor");
+    product = virPCIDeviceReadID(dev, "device");
+
+    if (!vendor || !product) {
+        virReportError(VIR_ERR_INTERNAL_ERROR,
+                       _("Failed to read product/vendor ID for %s"),
+                       dev->name);
+        goto error;
+    }
+
+    /* strings contain '0x' prefix */
+    if (snprintf(dev->id, sizeof(dev->id), "%s %s", &vendor[2],
+                 &product[2]) >= sizeof(dev->id)) {
+        virReportError(VIR_ERR_INTERNAL_ERROR,
+                       _("dev->id buffer overflow: %s %s"),
+                       &vendor[2], &product[2]);
+        goto error;
+    }
+
+    VIR_DEBUG("%s %s: initialized", dev->id, dev->name);
+
+ cleanup:
+    VIR_FREE(product);
+    VIR_FREE(vendor);
+    return dev;
+
+ error:
+    virPCIDeviceFree(dev);
+    dev = NULL;
+    goto cleanup;
+}
 
 virPCIDevicePtr
 virPCIDeviceNew(unsigned int domain,

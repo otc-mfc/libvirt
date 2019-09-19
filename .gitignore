@@ -135,6 +135,7 @@
 /src/libvirt_*helper
 /src/libvirt_*probes.h
 /src/libvirt_lxc
+/src/libvirt_sre
 /src/libvirtd
 /src/libvirtd*.logrotate
 /src/locking/libxl-lockd.conf
@@ -153,6 +154,11 @@
 /src/lxc/lxc_protocol.[ch]
 /src/lxc/test_libvirtd_lxc.aug
 /src/qemu/test_libvirtd_qemu.aug
+/src/sre/sre_controller_dispatch.h
+/src/sre/sre_monitor_dispatch.h
+/src/sre/sre_monitor_protocol.c
+/src/sre/sre_monitor_protocol.h
+/src/sre/sre_protocol.[ch]
 /src/remote/*_client_bodies.h
 /src/remote/*_protocol.[ch]
 /src/remote/*_stubs.h

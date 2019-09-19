@@ -1,0 +1,454 @@
+<domain type='sre' xmlns:sre='http://libvirt.org/schemas/domain/sre/1.0'>
+  <name>Euler</name>
+  <uuid>ecb6261a-f98f-4f69-b23d-991c8091f615</uuid>
+  <title>Linux</title>
+  <description>SRE test domain xml</description>
+  <metadata/>
+  <memory unit='KiB'>8388608</memory>
+  <currentMemory unit='KiB'>8388608</currentMemory>
+  <vcpu placement='static'>4</vcpu>
+  <os>
+    <type arch='x86_64'>hvm</type>
+    <kernel>/mnt/oagwy/kernel_for_manifest/vmlinuz-3.10.0-862.11.6.el7.x86_64</kernel>
+    <initrd>/mnt/oagwy/kernel_for_manifest/initramfs-3.10.0-862.11.6.el7.x86_64-osp.img</initrd>
+    <cmdline>console=ttyS0,115200n8 root=/dev/nfs ip=dhcp root=nfs:192.168.3.10:/export/linux_fs rw ignore_loglevel loglevel=8 show_lapic=all nohz_full=1-4 rcu_nocbs=1-4 io_delay=udelay</cmdline>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <apic/>
+    <pae/>
+    <pmu state='off'/>
+  </features>
+  <cpu mode='host-model'>
+    <model fallback='allow'/>
+  </cpu>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <controller type='virtio-serial' index='0'/>
+    <interface type='bridge'>
+      <mac address='fa:16:3e:57:06:72'/>
+      <source bridge='qbreefc3966-72'/>
+      <target dev='vif-sre3'/>
+      <model type='sre-net'/>
+    </interface>
+    <interface type='bridge'>
+      <mac address='fa:16:3e:57:06:73'/>
+      <source bridge='qbreefc3966-73'/>
+      <target dev='vif-virtio1'/>
+      <model type='virtio'/>
+    </interface>
+    <serial type='dev'>
+      <source path='com1'/>
+      <target port='0'/>
+    </serial>
+    <serial type='null'>
+      <target port='1'/>
+    </serial>
+    <serial type='null'>
+      <target port='2'/>
+    </serial>
+    <serial type='null'>
+      <target port='3'/>
+    </serial>
+    <console type='dev'>
+      <source path='com1'/>
+      <target type='serial' port='0'/>
+    </console>
+    <console type='dev'>
+      <source path='com1'/>
+      <target type='virtio' port='0'/>
+    </console>
+    <channel type='pipe'>
+      <source path='/dev/null'/>
+      <target type='guestfwd' address='0.0.0.0' port='10'/>
+    </channel>
+    <channel type='pipe'>
+      <source path='/dev/null'/>
+      <target type='guestfwd' address='0.0.0.0' port='11'/>
+    </channel>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x08' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x09' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x0a' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x0b' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x0c' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x0d' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x0e' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x0f' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x11' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x12' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x13' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x14' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x15' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x16' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x17' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x18' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x19' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x1a' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x1b' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x1c' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x1d' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x1e' function='0x0'/>
+      </source>
+    </hostdev>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x1f' function='0x0'/>
+      </source>
+    </hostdev>
+    <iommu model='intel'>
+      <driver intremap='off'/>
+    </iommu>
+  </devices>
+  <sre:policy>
+    <sre:ostype>Linux</sre:ostype>
+    <sre:paging>Off</sre:paging>
+    <sre:secure>Off</sre:secure>
+    <sre:cacheWays>0</sre:cacheWays>
+    <sre:dmaSize unit='MiB'>0</sre:dmaSize>
+    <sre:hashPageThreshold unit='KiB'>0</sre:hashPageThreshold>
+    <sre:devicePolicy action='allow'>reset</sre:devicePolicy>
+    <sre:devicePolicy action='assigned'>event_reporter</sre:devicePolicy>
+    <sre:devicePolicy action='violate_report_continue'>lpc</sre:devicePolicy>
+    <sre:devicePolicy action='violate_report_continue'>ppin</sre:devicePolicy>
+    <sre:exception action='allow'>pf</sre:exception>
+    <sre:exception action='allow'>bp</sre:exception>
+    <sre:exception action='allow'>gp</sre:exception>
+    <sre:featurePolicy action='violate_report_kill'>overhead_monitor</sre:featurePolicy>
+    <sre:featurePolicy action='violate_report_kill'>power_management</sre:featurePolicy>
+    <sre:featurePolicy action='violate_report_kill'>sw_debugger</sre:featurePolicy>
+    <sre:featurePolicy action='violate_report_kill'>tm</sre:featurePolicy>
+    <sre:featurePolicy action='violate_report_kill'>perfmon</sre:featurePolicy>
+    <sre:domainSalt>1fd633fdff682a69e48e4b2a6881741e5ad430be7a28ad4014eb2aee792ad7e0</sre:domainSalt>
+    <sre:exception action='violate_report_continue'>ud</sre:exception>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x8C02</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x02' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0xA182</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x03' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0xA1D2</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x04' function='0x0'/>
+      <sre:vendor>0x1000</sre:vendor>
+      <sre:device>0x005F</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x05' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x157B</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x06' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x1533</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x07' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x15AD</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x08' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x15AB</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x09' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x37D2</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x0A' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x37D2</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>1</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x0B' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x37D3</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x0C' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x37D3</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>1</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x0D' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x37D3</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>2</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x0E' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x37D3</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>3</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x0F' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x37CC</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x11' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x10D3</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x12' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x1572</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x13' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x1572</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>1</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x14' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x1572</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>2</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x15' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x1572</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>3</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x16' function='0x0'/>
+      <sre:vendor>0x14E4</sre:vendor>
+      <sre:device>0x1657</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x17' function='0x0'/>
+      <sre:vendor>0x14E4</sre:vendor>
+      <sre:device>0x1657</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x18' function='0x0'/>
+      <sre:vendor>0x14E4</sre:vendor>
+      <sre:device>0x1657</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x19' function='0x0'/>
+      <sre:vendor>0x14E4</sre:vendor>
+      <sre:device>0x1657</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x1A' function='0x0'/>
+      <sre:vendor>0x9005</sre:vendor>
+      <sre:device>0x028F</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x1B' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x0A54</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x1C' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x0A54</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x1D' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x37C8</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x1E' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x6F50</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x1F' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x1583</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+      <sre:instance>0</sre:instance>
+    </sre:hostdev>
+    <sre:ioPort action='allow_null'>0xA</sre:ioPort>
+    <sre:ioPort action='allow_null'>0x3F2</sre:ioPort>
+    <sre:ioPort action='allow_null'>0x3F4</sre:ioPort>
+    <sre:serial action='allow_shared' >0</sre:serial>
+    <sre:serial action='allow_null' >1</sre:serial>
+    <sre:serial action='allow_null' >2</sre:serial>
+    <sre:serial action='allow_null' >3</sre:serial>
+    <sre:portal name='vif-sre3' channel='3' unit='MiB' >2</sre:portal>
+    <sre:portal name='vif-virtio1' channel='1' unit='MiB' >1</sre:portal>
+  </sre:policy>
+</domain>

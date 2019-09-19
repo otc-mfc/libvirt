@@ -59,7 +59,8 @@ VIR_ENUM_IMPL(virHookDriver,
               "qemu",
               "lxc",
               "network",
-              "libxl")
+              "libxl",
+              "sre")
 
 VIR_ENUM_IMPL(virHookDaemonOp, VIR_HOOK_DAEMON_OP_LAST,
               "start",

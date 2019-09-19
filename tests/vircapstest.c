@@ -21,6 +21,7 @@
 #include <stdlib.h>
 
 #include "testutils.h"
+#include "testutilssre.h"
 #include "testutilslxc.h"
 #include "testutilsqemu.h"
 #include "capabilities.h"
@@ -232,6 +233,31 @@ test_virCapsDomainDataLookupLXC(const void *data ATTRIBUTE_UNUSED)
 }
 #endif /* WITH_LXC */
 
+#ifdef WITH_SRE
+static int
+test_virCapsDomainDataLookupSRE(const void *data ATTRIBUTE_UNUSED)
+{
+    int ret = 0;
+    virCapsPtr caps = NULL;
+
+    if (!(caps = testSRECapsInit())) {
+        ret = -1;
+        goto out;
+    }
+
+    CAPSCOMP(-1, VIR_ARCH_NONE, VIR_DOMAIN_VIRT_NONE, NULL, NULL,
+        VIR_DOMAIN_OSTYPE_EXE, VIR_ARCH_X86_64,
+        VIR_DOMAIN_VIRT_SRE, "/usr/libexec/libvirt_sre", NULL);
+    CAPSCOMP(-1, VIR_ARCH_X86_64, VIR_DOMAIN_VIRT_NONE, NULL, NULL,
+        VIR_DOMAIN_OSTYPE_EXE, VIR_ARCH_X86_64,
+        VIR_DOMAIN_VIRT_SRE, "/usr/libexec/libvirt_sre", NULL);
+
+ out:
+    virObjectUnref(caps);
+    return ret;
+}
+#endif
+
 static int
 mymain(void)
 {
@@ -250,6 +276,11 @@ mymain(void)
                    test_virCapsDomainDataLookupLXC, NULL) < 0)
         ret = -1;
 #endif /* WITH_LXC */
+#ifdef WITH_SRE
+    if (virTestRun("virCapsDomainDataLookupSRE",
+                   test_virCapsDomainDataLookupSRE, NULL) < 0)
+        ret = -1;
+#endif
 
     return ret;
 }

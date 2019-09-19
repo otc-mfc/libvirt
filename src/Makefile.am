@@ -129,6 +129,7 @@ include node_device/Makefile.inc.am
 include secret/Makefile.inc.am
 include storage/Makefile.inc.am
 include remote/Makefile.inc.am
+include sre/Makefile.inc.am
 
 
 THREAD_LIBS = $(LIB_PTHREAD) $(LTLIBMULTITHREAD)

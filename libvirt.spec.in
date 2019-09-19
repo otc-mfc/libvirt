@@ -18,6 +18,7 @@
 %{!?enable_autotools:%global enable_autotools 0}
 
 # The hypervisor drivers that run in libvirtd
+%define with_sre           0%{!?_without_sre:1}
 %define with_qemu          0%{!?_without_qemu:1}
 %define with_lxc           0%{!?_without_lxc:1}
 %define with_uml           0%{!?_without_uml:1}
@@ -252,7 +253,7 @@
 Summary: Library providing a simple virtualization API
 Name: libvirt
 Version: @VERSION@
-Release: 1%{?dist}%{?extra_release}
+Release: 24%{?dist}%{?extra_release}
 License: LGPLv2+
 URL: https://libvirt.org/
 
@@ -272,6 +273,9 @@ Requires: libvirt-daemon-driver-lxc = %{version}-%{release}
 %endif
 %if %{with_qemu}
 Requires: libvirt-daemon-driver-qemu = %{version}-%{release}
+%endif
+%if %{with_sre}
+Requires: libvirt-daemon-driver-sre = %{version}-%{release}
 %endif
 %if %{with_uml}
 Requires: libvirt-daemon-driver-uml = %{version}-%{release}
@@ -779,6 +783,21 @@ an implementation of the hypervisor driver APIs using
 QEMU
 %endif
 
+%if %{with_sre}
+%package daemon-driver-sre
+Summary: SRE driver plugin for the libvirtd daemon
+Requires: libvirt-daemon = %{version}-%{release}
+# There really is a hard cross-driver dependency here
+Requires: libvirt-daemon-driver-network = %{version}-%{release}
+Requires: libvirt-daemon-driver-storage-core = %{version}-%{release}
+
+%description daemon-driver-sre
+The sre driver plugin for the libvirtd daemon, providing
+an implementation of the hypervisor driver APIs using
+LM Microvisor
+%endif
+
+
 
 %if %{with_lxc}
 %package daemon-driver-lxc
@@ -893,6 +912,24 @@ Server side daemon and driver required to manage the virtualization
 capabilities of LXC
 %endif
 
+
+%if %{with_sre}
+%package daemon-sre
+Summary: Server side daemon & driver required to run SRE guests
+
+Requires: libvirt-daemon = %{version}-%{release}
+Requires: libvirt-daemon-driver-sre = %{version}-%{release}
+Requires: libvirt-daemon-driver-interface = %{version}-%{release}
+Requires: libvirt-daemon-driver-network = %{version}-%{release}
+Requires: libvirt-daemon-driver-nodedev = %{version}-%{release}
+Requires: libvirt-daemon-driver-nwfilter = %{version}-%{release}
+Requires: libvirt-daemon-driver-secret = %{version}-%{release}
+Requires: libvirt-daemon-driver-storage = %{version}-%{release}
+
+%description daemon-sre
+Server side daemon and driver required to manage the virtualization
+capabilities of SRE
+%endif
 
 %if %{with_uml}
 %package daemon-uml
@@ -1103,6 +1140,12 @@ echo "This RPM requires either Fedora >= %{min_fedora} or RHEL >= %{min_rhel}"
 exit 1
 %endif
 
+%if %{with_sre}
+    %define arg_sre --with-sre
+%else
+    %define arg_sre --without-sre
+%endif
+
 %if %{with_qemu}
     %define arg_qemu --with-qemu
 %else
@@ -1271,6 +1314,7 @@ export SOURCE_DATE_EPOCH=$(stat --printf='%Y' %{_specdir}/%{name}.spec)
 
 rm -f po/stamp-po
 %configure %{?arg_qemu} \
+           %{?arg_sre} \
            %{?arg_openvz} \
            %{?arg_lxc} \
            %{?arg_vbox} \
@@ -1400,6 +1444,11 @@ rm -f $RPM_BUILD_ROOT%{_datadir}/augeas/lenses/tests/test_libvirtd_lxc.aug
 rm -rf $RPM_BUILD_ROOT%{_sysconfdir}/libvirt/qemu.conf
 rm -rf $RPM_BUILD_ROOT%{_sysconfdir}/logrotate.d/libvirtd.qemu
 %endif
+
+%if ! %{with_sre}
+rm -rf $RPM_BUILD_ROOT%{_sysconfdir}/logrotate.d/libvirtd.sre
+%endif
+
 %if ! %{with_lxc}
 rm -rf $RPM_BUILD_ROOT%{_sysconfdir}/libvirt/lxc.conf
 rm -rf $RPM_BUILD_ROOT%{_sysconfdir}/logrotate.d/libvirtd.lxc
@@ -1938,6 +1987,16 @@ exit 0
 %{_libdir}/%{name}/connection-driver/libvirt_driver_uml.so
 %endif
 
+%if %{with_sre}
+%files daemon-driver-sre
+%dir %attr(0700, root, root) %{_localstatedir}/log/libvirt/sre/
+%config(noreplace) %{_sysconfdir}/logrotate.d/libvirtd.sre
+%ghost %dir %{_localstatedir}/run/libvirt/sre/
+%dir %attr(0700, root, root) %{_localstatedir}/lib/libvirt/sre/
+%attr(0755, root, root) %{_libexecdir}/libvirt_sre
+%{_libdir}/%{name}/connection-driver/libvirt_driver_sre.so
+%endif
+
 %if %{with_libxl}
 %files daemon-driver-libxl
 %config(noreplace) %{_sysconfdir}/libvirt/libxl.conf
@@ -1966,6 +2025,10 @@ exit 0
 
 %if %{with_lxc}
 %files daemon-lxc
+%endif
+
+%if %{with_sre}
+%files daemon-sre
 %endif
 
 %if %{with_uml}
