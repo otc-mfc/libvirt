@@ -1936,7 +1936,7 @@ lxcDomainSetSchedulerParametersFlags(virDomainPtr dom,
 
     if (persistentDef) {
         /* Make a copy for updated domain. */
-        persistentDefCopy = virDomainObjCopyPersistentDef(vm, caps, driver->xmlopt);
+        persistentDefCopy = virDomainObjCopyPersistentDef(vm, caps, driver->xmlopt, NULL);
         if (!persistentDefCopy)
             goto endjob;
     }
@@ -4736,7 +4736,7 @@ static int lxcDomainAttachDeviceFlags(virDomainPtr dom,
         goto endjob;
 
     dev = dev_copy = virDomainDeviceDefParse(xml, vm->def,
-                                             caps, driver->xmlopt,
+                                             caps, driver->xmlopt, NULL,
                                              VIR_DOMAIN_DEF_PARSE_INACTIVE);
     if (dev == NULL)
         goto endjob;
@@ -4748,14 +4748,14 @@ static int lxcDomainAttachDeviceFlags(virDomainPtr dom,
          * to CONFIG takes one instance.
          */
         dev_copy = virDomainDeviceDefCopy(dev, vm->def,
-                                          caps, driver->xmlopt);
+                                          caps, driver->xmlopt, NULL);
         if (!dev_copy)
             goto endjob;
     }
 
     if (flags & VIR_DOMAIN_AFFECT_CONFIG) {
         /* Make a copy for updated domain. */
-        vmdef = virDomainObjCopyPersistentDef(vm, caps, driver->xmlopt);
+        vmdef = virDomainObjCopyPersistentDef(vm, caps, driver->xmlopt, NULL);
         if (!vmdef)
             goto endjob;
 
@@ -4851,7 +4851,7 @@ static int lxcDomainUpdateDeviceFlags(virDomainPtr dom,
         goto endjob;
 
     dev = dev_copy = virDomainDeviceDefParse(xml, vm->def,
-                                             caps, driver->xmlopt,
+                                             caps, driver->xmlopt, NULL,
                                              VIR_DOMAIN_DEF_PARSE_INACTIVE);
     if (dev == NULL)
         goto endjob;
@@ -4863,14 +4863,14 @@ static int lxcDomainUpdateDeviceFlags(virDomainPtr dom,
          * to CONFIG takes one instance.
          */
         dev_copy = virDomainDeviceDefCopy(dev, vm->def,
-                                          caps, driver->xmlopt);
+                                          caps, driver->xmlopt, NULL);
         if (!dev_copy)
             goto endjob;
     }
 
     if (flags & VIR_DOMAIN_AFFECT_CONFIG) {
         /* Make a copy for updated domain. */
-        vmdef = virDomainObjCopyPersistentDef(vm, caps, driver->xmlopt);
+        vmdef = virDomainObjCopyPersistentDef(vm, caps, driver->xmlopt, NULL);
         if (!vmdef)
             goto endjob;
 
@@ -4941,7 +4941,7 @@ static int lxcDomainDetachDeviceFlags(virDomainPtr dom,
         goto endjob;
 
     dev = dev_copy = virDomainDeviceDefParse(xml, vm->def,
-                                             caps, driver->xmlopt,
+                                             caps, driver->xmlopt, NULL,
                                              VIR_DOMAIN_DEF_PARSE_INACTIVE |
                                              VIR_DOMAIN_DEF_PARSE_SKIP_VALIDATE);
     if (dev == NULL)
@@ -4954,14 +4954,14 @@ static int lxcDomainDetachDeviceFlags(virDomainPtr dom,
          * to CONFIG takes one instance.
          */
         dev_copy = virDomainDeviceDefCopy(dev, vm->def,
-                                          caps, driver->xmlopt);
+                                          caps, driver->xmlopt, NULL);
         if (!dev_copy)
             goto endjob;
     }
 
     if (flags & VIR_DOMAIN_AFFECT_CONFIG) {
         /* Make a copy for updated domain. */
-        vmdef = virDomainObjCopyPersistentDef(vm, caps, driver->xmlopt);
+        vmdef = virDomainObjCopyPersistentDef(vm, caps, driver->xmlopt, NULL);
         if (!vmdef)
             goto endjob;
 

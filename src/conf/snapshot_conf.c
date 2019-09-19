@@ -203,6 +203,7 @@ static virDomainSnapshotDefPtr
 virDomainSnapshotDefParse(xmlXPathContextPtr ctxt,
                           virCapsPtr caps,
                           virDomainXMLOptionPtr xmlopt,
+                          void *parseOpaque,
                           unsigned int flags)
 {
     virDomainSnapshotDefPtr def = NULL;
@@ -284,7 +285,7 @@ virDomainSnapshotDefParse(xmlXPathContextPtr ctxt,
                 goto cleanup;
             }
             def->dom = virDomainDefParseNode(ctxt->node->doc, domainNode,
-                                             caps, xmlopt, NULL, domainflags);
+                                             caps, xmlopt, parseOpaque, domainflags);
             if (!def->dom)
                 goto cleanup;
         } else {
@@ -389,6 +390,7 @@ virDomainSnapshotDefParseNode(xmlDocPtr xml,
                               xmlNodePtr root,
                               virCapsPtr caps,
                               virDomainXMLOptionPtr xmlopt,
+                              void *parseOpaque,
                               unsigned int flags)
 {
     xmlXPathContextPtr ctxt = NULL;
@@ -406,7 +408,7 @@ virDomainSnapshotDefParseNode(xmlDocPtr xml,
     }
 
     ctxt->node = root;
-    def = virDomainSnapshotDefParse(ctxt, caps, xmlopt, flags);
+    def = virDomainSnapshotDefParse(ctxt, caps, xmlopt, parseOpaque, flags);
  cleanup:
     xmlXPathFreeContext(ctxt);
     return def;
@@ -416,6 +418,7 @@ virDomainSnapshotDefPtr
 virDomainSnapshotDefParseString(const char *xmlStr,
                                 virCapsPtr caps,
                                 virDomainXMLOptionPtr xmlopt,
+                                void *parseOpaque,
                                 unsigned int flags)
 {
     virDomainSnapshotDefPtr ret = NULL;
@@ -425,7 +428,7 @@ virDomainSnapshotDefParseString(const char *xmlStr,
     if ((xml = virXMLParse(NULL, xmlStr, _("(domain_snapshot)")))) {
         xmlKeepBlanksDefault(keepBlanksDefault);
         ret = virDomainSnapshotDefParseNode(xml, xmlDocGetRootElement(xml),
-                                            caps, xmlopt, flags);
+                                            caps, xmlopt, parseOpaque, flags);
         xmlFreeDoc(xml);
     }
     xmlKeepBlanksDefault(keepBlanksDefault);

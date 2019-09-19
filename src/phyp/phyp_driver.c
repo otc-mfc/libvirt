@@ -1721,7 +1721,7 @@ phypDomainAttachDevice(virDomainPtr domain, const char *xml)
 
     def->os.type = VIR_DOMAIN_OSTYPE_LINUX;
 
-    dev = virDomainDeviceDefParse(xml, def, phyp_driver->caps, NULL,
+    dev = virDomainDeviceDefParse(xml, def, phyp_driver->caps, NULL, NULL,
                                   VIR_DOMAIN_DEF_PARSE_INACTIVE);
     if (!dev)
         goto cleanup;

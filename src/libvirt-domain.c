@@ -1073,9 +1073,7 @@ virDomainRestoreFlags(virConnectPtr conn, const char *from, const char *dxml,
  * previously by virDomainSave() or virDomainSaveFlags().
  *
  * No security-sensitive data will be included unless @flags contains
- * VIR_DOMAIN_XML_SECURE; this flag is rejected on read-only
- * connections.  For this API, @flags should not contain either
- * VIR_DOMAIN_XML_INACTIVE or VIR_DOMAIN_XML_UPDATE_CPU.
+ * VIR_DOMAIN_XML_SECURE.
  *
  * Returns a 0 terminated UTF-8 encoded XML instance, or NULL in case of
  * error.  The caller must free() the returned value.
@@ -1091,12 +1089,7 @@ virDomainSaveImageGetXMLDesc(virConnectPtr conn, const char *file,
 
     virCheckConnectReturn(conn, NULL);
     virCheckNonNullArgGoto(file, error);
-
-    if ((conn->flags & VIR_CONNECT_RO) && (flags & VIR_DOMAIN_XML_SECURE)) {
-        virReportError(VIR_ERR_OPERATION_DENIED, "%s",
-                       _("virDomainSaveImageGetXMLDesc with secure flag"));
-        goto error;
-    }
+    virCheckReadOnlyGoto(conn->flags, error);
 
     if (conn->driver->domainSaveImageGetXMLDesc) {
         char *ret;
@@ -5732,6 +5725,9 @@ virDomainGetInterfaceParameters(virDomainPtr domain,
  *     Current balloon value (in kb).
  * VIR_DOMAIN_MEMORY_STAT_LAST_UPDATE
  *     Timestamp of the last statistic
+ * VIR_DOMAIN_MEMORY_STAT_DISK_CACHES
+ *     Memory that can be reclaimed without additional I/O, typically disk
+ *     caches (in kb).
  *
  * Returns: The number of stats provided or -1 in case of failure.
  */
@@ -6689,6 +6685,11 @@ virDomainCreateWithFiles(virDomainPtr domain, unsigned int nfiles,
  * Provides a boolean value indicating whether the domain
  * configured to be automatically started when the host
  * machine boots.
+ *
+ * Please note that this might result in unexpected behaviour if
+ * used for some session URIs. Since the session daemon is started
+ * with --timeout it comes and goes and as it does so it
+ * autostarts domains which might have been shut off recently.
  *
  * Returns -1 in case of error, 0 in case of success
  */
@@ -8315,6 +8316,14 @@ virDomainDetachDeviceFlags(virDomainPtr domain,
  * media, altering the graphics configuration such as password,
  * reconfiguring the NIC device backend connectivity, etc.
  *
+ * The supplied XML description of the device should contain all
+ * the information that is found in the corresponding domain XML.
+ * Leaving out any piece of information may be treated as a
+ * request for its removal, which may be denied. For instance,
+ * when users want to change CDROM media only for live XML, they
+ * must provide live disk XML as found in the corresponding live
+ * domain XML with only the disk path changed.
+ *
  * Returns 0 in case of success, -1 in case of failure.
  */
 int
@@ -8365,7 +8374,9 @@ virDomainUpdateDeviceFlags(virDomainPtr domain,
  * asynchronous - it returns immediately after sending the detach
  * request to the hypervisor. It's caller's responsibility to
  * wait for VIR_DOMAIN_EVENT_ID_DEVICE_REMOVED event to signal
- * actual device removal.
+ * actual device removal or for
+ * VIR_DOMAIN_EVENT_ID_DEVICE_REMOVAL_FAILED to signal rejected
+ * device removal.
  *
  * Returns 0 in case of success, -1 in case of failure.
  */
@@ -9484,6 +9495,7 @@ virDomainManagedSaveDefineXML(virDomainPtr domain, const char *dxml,
 
     virCheckDomainReturn(domain, -1);
     conn = domain->conn;
+    virCheckReadOnlyGoto(conn->flags, error);
 
     if (conn->driver->domainManagedSaveDefineXML) {
         int ret;
@@ -11275,6 +11287,7 @@ virConnectGetDomainCapabilities(virConnectPtr conn,
     virResetLastError();
 
     virCheckConnectReturn(conn, NULL);
+    virCheckReadOnlyGoto(conn->flags, error);
 
     if (conn->driver->connectGetDomainCapabilities) {
         char *ret;

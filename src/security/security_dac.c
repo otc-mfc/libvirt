@@ -1248,7 +1248,12 @@ virSecurityDACSetChardevLabel(virSecurityManagerPtr mgr,
         break;
 
     case VIR_DOMAIN_CHR_TYPE_UNIX:
-        if (!dev_source->data.nix.listen) {
+        if (!dev_source->data.nix.listen ||
+            (dev_source->data.nix.path &&
+             virFileExists(dev_source->data.nix.path))) {
+            /* Also label mode='bind' sockets if they exist,
+             * e.g. because they were created by libvirt
+             * and passed via FD */
             if (virSecurityDACSetOwnership(priv, NULL,
                                            dev_source->data.nix.path,
                                            user, group) < 0)
@@ -1414,10 +1419,15 @@ virSecurityDACSetGraphicsLabel(virSecurityManagerPtr mgr,
                                virDomainGraphicsDefPtr gfx)
 
 {
+    const char *rendernode = virDomainGraphicsGetRenderNode(gfx);
     virSecurityDACDataPtr priv = virSecurityManagerGetPrivateData(mgr);
     virSecurityLabelDefPtr seclabel;
     uid_t user;
     gid_t group;
+
+    /* There's nothing to relabel */
+    if (!rendernode)
+        return 0;
 
     /* Skip chowning the shared render file if namespaces are disabled */
     if (!priv->mountNamespace)
@@ -1430,14 +1440,8 @@ virSecurityDACSetGraphicsLabel(virSecurityManagerPtr mgr,
     if (virSecurityDACGetIds(seclabel, priv, &user, &group, NULL, NULL) < 0)
         return -1;
 
-    if (gfx->type == VIR_DOMAIN_GRAPHICS_TYPE_SPICE &&
-        gfx->data.spice.gl == VIR_TRISTATE_BOOL_YES &&
-        gfx->data.spice.rendernode) {
-        if (virSecurityDACSetOwnership(priv, NULL,
-                                       gfx->data.spice.rendernode,
-                                       user, group) < 0)
-            return -1;
-    }
+    if (virSecurityDACSetOwnership(priv, NULL, rendernode, user, group) < 0)
+        return -1;
 
     return 0;
 }

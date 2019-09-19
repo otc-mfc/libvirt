@@ -65,7 +65,7 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
     X_QEMU_CAPS_MIGRATE_QEMU_TCP, /* have qemu tcp migration */
     X_QEMU_CAPS_MIGRATE_QEMU_EXEC, /* have qemu exec migration */
     X_QEMU_CAPS_DRIVE_CACHE_V2, /* cache= flag wanting new v2 values */
-    QEMU_CAPS_KVM, /* Whether KVM is enabled by default */
+    QEMU_CAPS_KVM, /* Whether KVM is usable / was used during probing */
     X_QEMU_CAPS_DRIVE_FORMAT, /* Is -drive format= avail */
 
     /* 15 */
@@ -79,7 +79,7 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
     X_QEMU_CAPS_XEN_DOMID, /* -xen-domid */
     X_QEMU_CAPS_MIGRATE_QEMU_UNIX, /* qemu migration via unix sockets */
     X_QEMU_CAPS_CHARDEV, /* Is the new -chardev arg available */
-    QEMU_CAPS_ENABLE_KVM, /* -enable-kvm flag */
+    X_QEMU_CAPS_ENABLE_KVM, /* -enable-kvm flag */
     X_QEMU_CAPS_MONITOR_JSON, /* JSON mode for monitor */
 
     /* 25 */
@@ -485,6 +485,13 @@ typedef enum { /* virQEMUCapsFlags grouping marker for syntax-check */
     /* 310 */
     QEMU_CAPS_SEV_GUEST, /* -object sev-guest,... */
     QEMU_CAPS_MACHINE_PSERIES_CAP_HPT_MAX_PAGE_SIZE, /* -machine pseries.cap-hpt-max-page-size */
+    QEMU_CAPS_MACHINE_PSERIES_CAP_HTM, /* -machine pseries.cap-htm */
+    QEMU_CAPS_USB_STORAGE_WERROR, /* -device usb-storage,werror=..,rerror=.. */
+    QEMU_CAPS_EGL_HEADLESS, /* -display egl-headless */
+
+    /* 315 */
+    QEMU_CAPS_VFIO_PCI_DISPLAY, /* -device vfio-pci.display */
+    QEMU_CAPS_EGL_HEADLESS_RENDERNODE, /* -display egl-headless,rendernode= */
 
     QEMU_CAPS_LAST /* this must always be the last item */
 } virQEMUCapsFlags;
@@ -566,8 +573,7 @@ void virQEMUCapsFilterByMachineType(virQEMUCapsPtr qemuCaps,
 virFileCachePtr virQEMUCapsCacheNew(const char *libDir,
                                     const char *cacheDir,
                                     uid_t uid,
-                                    gid_t gid,
-                                    unsigned int microcodeVersion);
+                                    gid_t gid);
 virQEMUCapsPtr virQEMUCapsCacheLookup(virFileCachePtr cache,
                                       const char *binary);
 virQEMUCapsPtr virQEMUCapsCacheLookupCopy(virFileCachePtr cache,

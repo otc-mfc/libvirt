@@ -136,7 +136,8 @@ typedef virCPUx86Model *virCPUx86ModelPtr;
 struct _virCPUx86Model {
     char *name;
     virCPUx86VendorPtr vendor;
-    uint32_t signature;
+    size_t nsignatures;
+    uint32_t *signatures;
     virCPUx86Data data;
 };
 
@@ -154,7 +155,6 @@ struct _virCPUx86Map {
 };
 
 static virCPUx86MapPtr cpuMap;
-static unsigned int microcodeVersion;
 
 int virCPUx86DriverOnceInit(void);
 VIR_ONCE_GLOBAL_INIT(virCPUx86Driver);
@@ -1008,8 +1008,29 @@ x86ModelFree(virCPUx86ModelPtr model)
         return;
 
     VIR_FREE(model->name);
+    VIR_FREE(model->signatures);
     virCPUx86DataClear(&model->data);
     VIR_FREE(model);
+}
+
+
+static int
+x86ModelCopySignatures(virCPUx86ModelPtr dst,
+                       virCPUx86ModelPtr src)
+{
+    size_t i;
+
+    if (src->nsignatures == 0)
+        return 0;
+
+    if (VIR_ALLOC_N(dst->signatures, src->nsignatures) < 0)
+        return -1;
+
+    dst->nsignatures = src->nsignatures;
+    for (i = 0; i < src->nsignatures; i++)
+        dst->signatures[i] = src->signatures[i];
+
+    return 0;
 }
 
 
@@ -1020,13 +1041,13 @@ x86ModelCopy(virCPUx86ModelPtr model)
 
     if (VIR_ALLOC(copy) < 0 ||
         VIR_STRDUP(copy->name, model->name) < 0 ||
+        x86ModelCopySignatures(copy, model) < 0 ||
         x86DataCopy(&copy->data, &model->data) < 0) {
         x86ModelFree(copy);
         return NULL;
     }
 
     copy->vendor = model->vendor;
-    copy->signature = model->signature;
 
     return copy;
 }
@@ -1184,6 +1205,61 @@ x86ModelCompare(virCPUx86ModelPtr model1,
 }
 
 
+static int
+x86ModelParseSignatures(virCPUx86ModelPtr model,
+                        xmlXPathContextPtr ctxt)
+{
+    xmlNodePtr *nodes = NULL;
+    xmlNodePtr root = ctxt->node;
+    size_t i;
+    int n;
+    int ret = -1;
+
+    if ((n = virXPathNodeSet("./signature", ctxt, &nodes)) <= 0)
+        return n;
+
+    /* Remove inherited signatures. */
+    VIR_FREE(model->signatures);
+
+    model->nsignatures = n;
+    if (VIR_ALLOC_N(model->signatures, n) < 0)
+       goto cleanup;
+
+    for (i = 0; i < n; i++) {
+        unsigned int sigFamily = 0;
+        unsigned int sigModel = 0;
+        int rc;
+
+        ctxt->node = nodes[i];
+
+        rc = virXPathUInt("string(@family)", ctxt, &sigFamily);
+        if (rc < 0 || sigFamily == 0) {
+            virReportError(VIR_ERR_INTERNAL_ERROR,
+                           _("Invalid CPU signature family in model %s"),
+                           model->name);
+            goto cleanup;
+        }
+
+        rc = virXPathUInt("string(@model)", ctxt, &sigModel);
+        if (rc < 0 || sigModel == 0) {
+            virReportError(VIR_ERR_INTERNAL_ERROR,
+                           _("Invalid CPU signature model in model %s"),
+                           model->name);
+            goto cleanup;
+        }
+
+        model->signatures[i] = x86MakeSignature(sigFamily, sigModel, 0);
+    }
+
+    ctxt->node = root;
+    ret = 0;
+
+ cleanup:
+    VIR_FREE(nodes);
+    return ret;
+}
+
+
 static virCPUx86ModelPtr
 x86ModelParse(xmlXPathContextPtr ctxt,
               virCPUx86MapPtr map)
@@ -1227,34 +1303,13 @@ x86ModelParse(xmlXPathContextPtr ctxt,
         VIR_FREE(name);
 
         model->vendor = ancestor->vendor;
-        model->signature = ancestor->signature;
-        if (x86DataCopy(&model->data, &ancestor->data) < 0)
+        if (x86ModelCopySignatures(model, ancestor) < 0 ||
+            x86DataCopy(&model->data, &ancestor->data) < 0)
             goto error;
     }
 
-    if (virXPathBoolean("boolean(./signature)", ctxt)) {
-        unsigned int sigFamily = 0;
-        unsigned int sigModel = 0;
-        int rc;
-
-        rc = virXPathUInt("string(./signature/@family)", ctxt, &sigFamily);
-        if (rc < 0 || sigFamily == 0) {
-            virReportError(VIR_ERR_INTERNAL_ERROR,
-                           _("Invalid CPU signature family in model %s"),
-                           model->name);
-            goto cleanup;
-        }
-
-        rc = virXPathUInt("string(./signature/@model)", ctxt, &sigModel);
-        if (rc < 0 || sigModel == 0) {
-            virReportError(VIR_ERR_INTERNAL_ERROR,
-                           _("Invalid CPU signature model in model %s"),
-                           model->name);
-            goto cleanup;
-        }
-
-        model->signature = x86MakeSignature(sigFamily, sigModel, 0);
-    }
+    if (x86ModelParseSignatures(model, ctxt) < 0)
+        goto cleanup;
 
     if (virXPathBoolean("boolean(./vendor)", ctxt)) {
         vendor = virXPathString("string(./vendor/@name)", ctxt);
@@ -1412,8 +1467,6 @@ virCPUx86DriverOnceInit(void)
 {
     if (!(cpuMap = virCPUx86LoadMap()))
         return -1;
-
-    microcodeVersion = virHostCPUGetMicrocodeVersion();
 
     return 0;
 }
@@ -1643,7 +1696,8 @@ x86Compute(virCPUDefPtr host,
                                      &host_model->vendor->cpuid) < 0)
             goto error;
 
-        if (x86DataAddSignature(&guest_model->data, host_model->signature) < 0)
+        if (host_model->signatures &&
+            x86DataAddSignature(&guest_model->data, *host_model->signatures) < 0)
             goto error;
 
         if (cpu->type == VIR_CPU_TYPE_GUEST
@@ -1749,6 +1803,41 @@ virCPUx86Compare(virCPUDefPtr host,
 }
 
 
+static bool
+x86ModelHasSignature(virCPUx86ModelPtr model,
+                     uint32_t signature)
+{
+    size_t i;
+
+    for (i = 0; i < model->nsignatures; i++) {
+        if (model->signatures[i] == signature)
+            return true;
+    }
+
+    return false;
+}
+
+
+static char *
+x86FormatSignatures(virCPUx86ModelPtr model)
+{
+    virBuffer buf = VIR_BUFFER_INITIALIZER;
+    size_t i;
+
+    for (i = 0; i < model->nsignatures; i++) {
+        virBufferAsprintf(&buf, "%06lx,",
+                          (unsigned long)model->signatures[i]);
+    }
+
+    virBufferTrim(&buf, ",", -1);
+
+    if (virBufferCheckError(&buf) < 0)
+        return NULL;
+
+    return virBufferContentAndReset(&buf);
+}
+
+
 /*
  * Checks whether a candidate model is a better fit for the CPU data than the
  * current model.
@@ -1790,8 +1879,8 @@ x86DecodeUseCandidate(virCPUx86ModelPtr current,
      * consider candidates with matching family/model.
      */
     if (signature &&
-        current->signature == signature &&
-        candidate->signature != signature) {
+        x86ModelHasSignature(current, signature) &&
+        !x86ModelHasSignature(candidate, signature)) {
         VIR_DEBUG("%s differs in signature from matching %s",
                   cpuCandidate->model, cpuCurrent->model);
         return 0;
@@ -1807,8 +1896,8 @@ x86DecodeUseCandidate(virCPUx86ModelPtr current,
      * result in longer list of features.
      */
     if (signature &&
-        candidate->signature == signature &&
-        current->signature != signature) {
+        x86ModelHasSignature(candidate, signature) &&
+        !x86ModelHasSignature(current, signature)) {
         VIR_DEBUG("%s provides matching signature", cpuCandidate->model);
         return 1;
     }
@@ -1872,6 +1961,7 @@ x86Decode(virCPUDefPtr cpu,
     virCPUx86Data features = VIR_CPU_X86_DATA_INIT;
     virCPUx86VendorPtr vendor;
     virDomainCapsCPUModelPtr hvModel = NULL;
+    char *sigs = NULL;
     uint32_t signature;
     ssize_t i;
     int rc;
@@ -1964,6 +2054,11 @@ x86Decode(virCPUDefPtr cpu,
     if (vendor && VIR_STRDUP(cpu->vendor, vendor->name) < 0)
         goto cleanup;
 
+    sigs = x86FormatSignatures(model);
+
+    VIR_DEBUG("Using CPU model %s (signatures %s) for CPU with signature %06lx",
+              model->name, NULLSTR(sigs), (unsigned long)signature);
+
     VIR_STEAL_PTR(cpu->model, cpuModel->model);
     VIR_STEAL_PTR(cpu->features, cpuModel->features);
     cpu->nfeatures = cpuModel->nfeatures;
@@ -1978,6 +2073,7 @@ x86Decode(virCPUDefPtr cpu,
     virCPUx86DataClear(&data);
     virCPUx86DataClear(&copy);
     virCPUx86DataClear(&features);
+    VIR_FREE(sigs);
     return ret;
 }
 
@@ -2113,6 +2209,41 @@ x86Encode(virArch arch,
     virCPUx86DataFree(data_forbidden);
     virCPUx86DataFree(data_vendor);
     return -1;
+}
+
+
+static int
+virCPUx86CheckFeature(const virCPUDef *cpu,
+                      const char *name)
+{
+    int ret = -1;
+    virCPUx86MapPtr map;
+    virCPUx86ModelPtr model = NULL;
+
+    if (!(map = virCPUx86GetMap()))
+        return -1;
+
+    if (!(model = x86ModelFromCPU(cpu, map, -1)))
+        goto cleanup;
+
+    ret = x86FeatureInData(name, &model->data, map);
+
+ cleanup:
+    x86ModelFree(model);
+    return ret;
+}
+
+
+static int
+virCPUx86DataCheckFeature(const virCPUData *data,
+                          const char *name)
+{
+    virCPUx86MapPtr map;
+
+    if (!(map = virCPUx86GetMap()))
+        return -1;
+
+    return x86FeatureInData(name, &data->data.x86, map);
 }
 
 
@@ -2454,7 +2585,16 @@ virCPUx86GetHost(virCPUDefPtr cpu,
         goto cleanup;
 
     ret = x86DecodeCPUData(cpu, cpuData, models);
-    cpu->microcodeVersion = microcodeVersion;
+    cpu->microcodeVersion = virHostCPUGetMicrocodeVersion();
+
+    /* Probing for TSC frequency makes sense only if the CPU supports
+     * invariant TSC (Linux calls this constant_tsc in /proc/cpuinfo). */
+    if (virCPUx86DataCheckFeature(cpuData, "invtsc") == 1) {
+        VIR_DEBUG("Checking invariant TSC frequency");
+        cpu->tsc = virHostCPUGetTscInfo();
+    } else {
+        VIR_DEBUG("Host CPU does not support invariant TSC");
+    }
 
  cleanup:
     virCPUx86DataFree(cpuData);
@@ -2793,40 +2933,6 @@ virCPUx86UpdateLive(virCPUDefPtr cpu,
 
 
 static int
-virCPUx86CheckFeature(const virCPUDef *cpu,
-                      const char *name)
-{
-    int ret = -1;
-    virCPUx86MapPtr map;
-    virCPUx86ModelPtr model = NULL;
-
-    if (!(map = virCPUx86GetMap()))
-        return -1;
-
-    if (!(model = x86ModelFromCPU(cpu, map, -1)))
-        goto cleanup;
-
-    ret = x86FeatureInData(name, &model->data, map);
-
- cleanup:
-    x86ModelFree(model);
-    return ret;
-}
-
-
-static int
-virCPUx86DataCheckFeature(const virCPUData *data,
-                          const char *name)
-{
-    virCPUx86MapPtr map;
-
-    if (!(map = virCPUx86GetMap()))
-        return -1;
-
-    return x86FeatureInData(name, &data->data.x86, map);
-}
-
-static int
 virCPUx86GetModels(char ***models)
 {
     virCPUx86MapPtr map;
@@ -2876,7 +2982,8 @@ virCPUx86Translate(virCPUDefPtr cpu,
         virCPUx86DataAddCPUIDInt(&model->data, &model->vendor->cpuid) < 0)
         goto cleanup;
 
-    if (x86DataAddSignature(&model->data, model->signature) < 0)
+    if (model->signatures &&
+        x86DataAddSignature(&model->data, model->signatures[0]) < 0)
         goto cleanup;
 
     if (!(translated = virCPUDefCopyWithoutModel(cpu)))

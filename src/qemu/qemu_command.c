@@ -105,7 +105,8 @@ VIR_ENUM_IMPL(qemuVideo, VIR_DOMAIN_VIDEO_TYPE_LAST,
               "qxl",
               "", /* don't support parallels */
               "", /* no need for virtio */
-              "" /* don't support gop */);
+              "" /* don't support gop */,
+              "" /* 'none' doesn't make sense here */);
 
 VIR_ENUM_DECL(qemuDeviceVideo)
 
@@ -119,7 +120,8 @@ VIR_ENUM_IMPL(qemuDeviceVideo, VIR_DOMAIN_VIDEO_TYPE_LAST,
               "qxl-vga",
               "", /* don't support parallels */
               "virtio-vga",
-              "" /* don't support gop */);
+              "" /* don't support gop */,
+              "" /* 'none' doesn't make sense here */);
 
 VIR_ENUM_DECL(qemuDeviceVideoSecondary)
 
@@ -133,7 +135,8 @@ VIR_ENUM_IMPL(qemuDeviceVideoSecondary, VIR_DOMAIN_VIDEO_TYPE_LAST,
               "qxl",
               "", /* don't support parallels */
               "virtio-gpu",
-              "" /* don't support gop */);
+              "" /* don't support gop */,
+              "" /* 'none' doesn't make sense here */);
 
 VIR_ENUM_DECL(qemuSoundCodec)
 
@@ -4421,6 +4424,9 @@ qemuBuildVideoCommandLine(virCommandPtr cmd,
         char *str = NULL;
         virDomainVideoDefPtr video = def->videos[i];
 
+        if (video->type == VIR_DOMAIN_VIDEO_TYPE_NONE)
+            continue;
+
         if (video->primary) {
             if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VIDEO_PRIMARY)) {
 
@@ -4734,7 +4740,7 @@ qemuBuildSCSIHostdevDrvStr(virDomainHostdevDefPtr dev,
     } else {
         if (!(source = qemuBuildSCSIHostHostdevDrvStr(dev)))
             goto error;
-        virBufferAsprintf(&buf, "file=/dev/%s,if=none", source);
+        virBufferAsprintf(&buf, "file=/dev/%s,if=none,format=raw", source);
     }
     VIR_FREE(source);
 
@@ -4927,12 +4933,25 @@ qemuOpenChrChardevUNIXSocket(const virDomainChrSourceDef *dev)
         goto error;
     }
 
+    /* We run QEMU with umask 0002. Compensate for the umask
+     * libvirtd might be running under to get the same permission
+     * QEMU would have. */
+    if (virFileUpdatePerm(dev->data.nix.path, 0002, 0664) < 0)
+        goto error;
+
     return fd;
 
  error:
     VIR_FORCE_CLOSE(fd);
     return -1;
 }
+
+
+enum {
+    QEMU_BUILD_CHARDEV_TCP_NOWAIT = (1 << 0),
+    QEMU_BUILD_CHARDEV_FILE_LOGD  = (1 << 1),
+    QEMU_BUILD_CHARDEV_UNIX_FD_PASS = (1 << 2),
+};
 
 /* This function outputs a -chardev command line option which describes only the
  * host side of the character device */
@@ -4945,8 +4964,7 @@ qemuBuildChrChardevStr(virLogManagerPtr logManager,
                        const virDomainChrSourceDef *dev,
                        const char *alias,
                        virQEMUCapsPtr qemuCaps,
-                       bool nowait,
-                       bool chardevStdioLogd)
+                       unsigned int flags)
 {
     virBuffer buf = VIR_BUFFER_INITIALIZER;
     bool telnet;
@@ -4985,7 +5003,8 @@ qemuBuildChrChardevStr(virLogManagerPtr logManager,
                            _("append not supported in this QEMU binary"));
             goto cleanup;
         }
-        if (qemuBuildChrChardevFileStr(chardevStdioLogd ? logManager : NULL,
+        if (qemuBuildChrChardevFileStr(flags & QEMU_BUILD_CHARDEV_FILE_LOGD ?
+                                       logManager : NULL,
                                        cmd, def, &buf,
                                        "path", dev->data.file.path,
                                        "append", dev->data.file.append) < 0)
@@ -5031,8 +5050,11 @@ qemuBuildChrChardevStr(virLogManagerPtr logManager,
                           dev->data.tcp.service,
                           telnet ? ",telnet" : "");
 
-        if (dev->data.tcp.listen)
-            virBufferAdd(&buf, nowait ? ",server,nowait" : ",server", -1);
+        if (dev->data.tcp.listen) {
+            virBufferAddLit(&buf, ",server");
+            if (flags & QEMU_BUILD_CHARDEV_TCP_NOWAIT)
+                virBufferAddLit(&buf, ",nowait");
+        }
 
         qemuBuildChrChardevReconnectStr(&buf, &dev->data.tcp.reconnect);
 
@@ -5072,7 +5094,9 @@ qemuBuildChrChardevStr(virLogManagerPtr logManager,
         break;
 
     case VIR_DOMAIN_CHR_TYPE_UNIX:
-        if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_CHARDEV_FD_PASS)) {
+        if (dev->data.nix.listen &&
+            (flags & QEMU_BUILD_CHARDEV_UNIX_FD_PASS) &&
+            virQEMUCapsGet(qemuCaps, QEMU_CAPS_CHARDEV_FD_PASS)) {
             if (qemuSecuritySetSocketLabel(secManager, (virDomainDefPtr)def) < 0)
                 goto cleanup;
             int fd = qemuOpenChrChardevUNIXSocket(dev);
@@ -5090,8 +5114,11 @@ qemuBuildChrChardevStr(virLogManagerPtr logManager,
             virBufferAsprintf(&buf, "socket,id=%s,path=", charAlias);
             virQEMUBuildBufferEscapeComma(&buf, dev->data.nix.path);
         }
-        if (dev->data.nix.listen)
-            virBufferAdd(&buf, nowait ? ",server,nowait" : ",server", -1);
+        if (dev->data.nix.listen) {
+            virBufferAddLit(&buf, ",server");
+            if (flags & QEMU_BUILD_CHARDEV_TCP_NOWAIT)
+                virBufferAddLit(&buf, ",nowait");
+        }
 
         qemuBuildChrChardevReconnectStr(&buf, &dev->data.nix.reconnect);
         break;
@@ -5161,6 +5188,10 @@ qemuBuildHostdevMediatedDevStr(const virDomainDef *def,
 
     virBufferAdd(&buf, dev_str, -1);
     virBufferAsprintf(&buf, ",id=%s,sysfsdev=%s", dev->info->alias, mdevPath);
+
+    if (mdevsrc->display != VIR_TRISTATE_SWITCH_ABSENT)
+        virBufferAsprintf(&buf, ",display=%s",
+                          virTristateSwitchTypeToString(mdevsrc->display));
 
     if (qemuBuildDeviceAddressStr(&buf, def, dev->info, qemuCaps) < 0)
         goto cleanup;
@@ -5379,7 +5410,9 @@ qemuBuildHostdevCommandLine(virCommandPtr cmd,
 
         /* MDEV */
         if (virHostdevIsMdevDevice(hostdev)) {
-            switch ((virMediatedDeviceModelType) subsys->u.mdev.model) {
+            virDomainHostdevSubsysMediatedDevPtr mdevsrc = &subsys->u.mdev;
+
+            switch ((virMediatedDeviceModelType) mdevsrc->model) {
             case VIR_MDEV_MODEL_TYPE_VFIO_PCI:
                 if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VFIO_PCI)) {
                     virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
@@ -5387,6 +5420,7 @@ qemuBuildHostdevCommandLine(virCommandPtr cmd,
                                      "supported by this version of QEMU"));
                     return -1;
                 }
+
                 break;
             case VIR_MDEV_MODEL_TYPE_VFIO_CCW:
                 if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_DEVICE_VFIO_CCW)) {
@@ -5425,6 +5459,10 @@ qemuBuildMonitorCommandLine(virLogManagerPtr logManager,
                             qemuDomainObjPrivatePtr priv)
 {
     char *chrdev;
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (priv->chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
 
     if (!priv->monConfig)
         return 0;
@@ -5432,8 +5470,7 @@ qemuBuildMonitorCommandLine(virLogManagerPtr logManager,
     if (!(chrdev = qemuBuildChrChardevStr(logManager, secManager,
                                           cmd, cfg, def,
                                           priv->monConfig, "monitor",
-                                          priv->qemuCaps, true,
-                                          priv->chardevStdioLogd)))
+                                          priv->qemuCaps, cdevflags)))
         return -1;
     virCommandAddArg(cmd, "-chardev");
     virCommandAddArg(cmd, chrdev);
@@ -5558,6 +5595,10 @@ qemuBuildRNGBackendChrdevStr(virLogManagerPtr logManager,
                              char **chr,
                              bool chardevStdioLogd)
 {
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
     *chr = NULL;
 
     switch ((virDomainRNGBackend) rng->backend) {
@@ -5570,8 +5611,8 @@ qemuBuildRNGBackendChrdevStr(virLogManagerPtr logManager,
         if (!(*chr = qemuBuildChrChardevStr(logManager, secManager,
                                             cmd, cfg, def,
                                             rng->source.chardev,
-                                            rng->info.alias, qemuCaps, true,
-                                            chardevStdioLogd)))
+                                            rng->info.alias, qemuCaps,
+                                            cdevflags)))
             return -1;
     }
 
@@ -6677,6 +6718,8 @@ qemuBuildCpuModelArgStr(virQEMUDriverPtr driver,
     size_t i;
     virCapsPtr caps = NULL;
     virCPUDefPtr cpu = def->cpu;
+    bool hle = false;
+    bool rtm = false;
 
     if (!(caps = virQEMUDriverGetCapabilities(driver, false)))
         goto cleanup;
@@ -6734,6 +6777,11 @@ qemuBuildCpuModelArgStr(virQEMUDriverPtr driver,
         virBufferAsprintf(buf, ",vendor=%s", cpu->vendor_id);
 
     for (i = 0; i < cpu->nfeatures; i++) {
+        if (STREQ("rtm", cpu->features[i].name))
+            rtm = true;
+        if (STREQ("hle", cpu->features[i].name))
+            hle = true;
+
         switch ((virCPUFeaturePolicy) cpu->features[i].policy) {
         case VIR_CPU_FEATURE_FORCE:
         case VIR_CPU_FEATURE_REQUIRE:
@@ -6754,6 +6802,28 @@ qemuBuildCpuModelArgStr(virQEMUDriverPtr driver,
         case VIR_CPU_FEATURE_OPTIONAL:
         case VIR_CPU_FEATURE_LAST:
             break;
+        }
+    }
+
+    /* Some versions of qemu-kvm in RHEL provide Broadwell and Haswell CPU
+     * models which lack rtm and hle features when used with some machine
+     * types. Let's make sure Broadwell and Haswell will always have these
+     * features. But only if the features were not explicitly mentioned in
+     * the guest CPU definition.
+     */
+    if (STREQ_NULLABLE(cpu->model, "Broadwell") ||
+        STREQ_NULLABLE(cpu->model, "Haswell")) {
+        if (!rtm) {
+            if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_QUERY_CPU_MODEL_EXPANSION))
+                virBufferAddLit(buf, ",rtm=on");
+            else
+                virBufferAddLit(buf, ",+rtm");
+        }
+        if (!hle) {
+            if (virQEMUCapsGet(qemuCaps, QEMU_CAPS_QUERY_CPU_MODEL_EXPANSION))
+                virBufferAddLit(buf, ",hle=on");
+            else
+                virBufferAddLit(buf, ",+hle");
         }
     }
 
@@ -7298,6 +7368,26 @@ qemuBuildMachineCommandLine(virCommandPtr cmd,
         }
     }
 
+    if (def->features[VIR_DOMAIN_FEATURE_HTM] != VIR_TRISTATE_SWITCH_ABSENT) {
+        const char *str;
+
+        if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_MACHINE_PSERIES_CAP_HTM)) {
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                           _("HTM configuration is not supported by this "
+                             "QEMU binary"));
+            goto cleanup;
+        }
+
+        str = virTristateSwitchTypeToString(def->features[VIR_DOMAIN_FEATURE_HTM]);
+        if (!str) {
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                           _("Invalid setting for HTM state"));
+            goto cleanup;
+        }
+
+        virBufferAsprintf(&buf, ",cap-htm=%s", str);
+    }
+
     if (cpu && cpu->model &&
         cpu->mode == VIR_CPU_MODE_HOST_MODEL &&
         qemuDomainIsPSeries(def) &&
@@ -7397,16 +7487,6 @@ qemuBuildMemPathStr(virQEMUDriverConfigPtr cfg,
      */
     if (!def->mem.nhugepages)
         return 0;
-
-    if (def->mem.hugepages[0].nodemask) {
-        ssize_t next_bit = virBitmapNextSetBit(def->mem.hugepages[0].nodemask, -1);
-        if (next_bit >= 0) {
-            virReportError(VIR_ERR_XML_DETAIL,
-                           _("hugepages: node %zd not found"),
-                           next_bit);
-            return -1;
-        }
-    }
 
     /* There is one special case: if user specified "huge"
      * pages of regular system pages size.
@@ -7539,30 +7619,6 @@ qemuBuildNumaArgStr(virQEMUDriverConfigPtr cfg,
 
     if (!virDomainNumatuneNodesetIsAvailable(def->numa, priv->autoNodeset))
         goto cleanup;
-
-    for (i = 0; i < def->mem.nhugepages; i++) {
-        ssize_t next_bit, pos = 0;
-
-        if (!def->mem.hugepages[i].nodemask) {
-            /* This is the master hugepage to use. Skip it as it has no
-             * nodemask anyway. */
-            continue;
-        }
-
-        if (ncells) {
-            /* Fortunately, we allow only guest NUMA nodes to be continuous
-             * starting from zero. */
-            pos = ncells - 1;
-        }
-
-        next_bit = virBitmapNextSetBit(def->mem.hugepages[i].nodemask, pos);
-        if (next_bit >= 0) {
-            virReportError(VIR_ERR_XML_DETAIL,
-                           _("hugepages: node %zd not found"),
-                           next_bit);
-            goto cleanup;
-        }
-    }
 
     if (VIR_ALLOC_N(nodeBackends, ncells) < 0)
         goto cleanup;
@@ -8138,29 +8194,91 @@ qemuBuildGraphicsSPICECommandLine(virQEMUDriverConfigPtr cfg,
     return -1;
 }
 
+
+static int
+qemuBuildGraphicsEGLHeadlessCommandLine(virQEMUDriverConfigPtr cfg ATTRIBUTE_UNUSED,
+                                        virCommandPtr cmd,
+                                        virQEMUCapsPtr qemuCaps,
+                                        virDomainGraphicsDefPtr graphics)
+{
+    int ret = -1;
+    virBuffer opt = VIR_BUFFER_INITIALIZER;
+
+    virBufferAddLit(&opt, "egl-headless");
+
+    if (graphics->data.egl_headless.rendernode) {
+        if (!virQEMUCapsGet(qemuCaps, QEMU_CAPS_EGL_HEADLESS_RENDERNODE)) {
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
+                           _("This QEMU doesn't support OpenGL rendernode "
+                             "with egl-headless graphics type"));
+            goto cleanup;
+        }
+
+        virBufferAddLit(&opt, ",rendernode=");
+        virQEMUBuildBufferEscapeComma(&opt,
+                                      graphics->data.egl_headless.rendernode);
+    }
+
+    if (virBufferCheckError(&opt) < 0)
+        goto cleanup;
+
+    virCommandAddArg(cmd, "-display");
+    virCommandAddArgBuffer(cmd, &opt);
+
+    ret = 0;
+ cleanup:
+    virBufferFreeAndReset(&opt);
+    return ret;
+}
+
+
 static int
 qemuBuildGraphicsCommandLine(virQEMUDriverConfigPtr cfg,
                              virCommandPtr cmd,
-                             virQEMUCapsPtr qemuCaps,
-                             virDomainGraphicsDefPtr graphics)
+                             virDomainDefPtr def,
+                             virQEMUCapsPtr qemuCaps)
 {
-    switch (graphics->type) {
-    case VIR_DOMAIN_GRAPHICS_TYPE_SDL:
-        return qemuBuildGraphicsSDLCommandLine(cfg, cmd, qemuCaps, graphics);
+    size_t i;
 
-    case VIR_DOMAIN_GRAPHICS_TYPE_VNC:
-        return qemuBuildGraphicsVNCCommandLine(cfg, cmd, qemuCaps, graphics);
+    for (i = 0; i < def->ngraphics; i++) {
+        virDomainGraphicsDefPtr graphics = def->graphics[i];
 
-    case VIR_DOMAIN_GRAPHICS_TYPE_SPICE:
-        return qemuBuildGraphicsSPICECommandLine(cfg, cmd, qemuCaps, graphics);
+        switch (graphics->type) {
+        case VIR_DOMAIN_GRAPHICS_TYPE_SDL:
+            if (qemuBuildGraphicsSDLCommandLine(cfg, cmd,
+                                                qemuCaps, graphics) < 0)
+                return -1;
 
-    case VIR_DOMAIN_GRAPHICS_TYPE_RDP:
-    case VIR_DOMAIN_GRAPHICS_TYPE_DESKTOP:
-    case VIR_DOMAIN_GRAPHICS_TYPE_LAST:
-        virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
-                       _("unsupported graphics type '%s'"),
-                       virDomainGraphicsTypeToString(graphics->type));
-        return -1;
+            break;
+        case VIR_DOMAIN_GRAPHICS_TYPE_VNC:
+            if (qemuBuildGraphicsVNCCommandLine(cfg, cmd,
+                                                qemuCaps, graphics) < 0)
+                return -1;
+
+            break;
+        case VIR_DOMAIN_GRAPHICS_TYPE_SPICE:
+            if (qemuBuildGraphicsSPICECommandLine(cfg, cmd,
+                                                  qemuCaps, graphics) < 0)
+                return -1;
+
+            break;
+        case VIR_DOMAIN_GRAPHICS_TYPE_EGL_HEADLESS:
+            if (qemuBuildGraphicsEGLHeadlessCommandLine(cfg, cmd,
+                                                        qemuCaps, graphics) < 0)
+                return -1;
+
+            break;
+        case VIR_DOMAIN_GRAPHICS_TYPE_RDP:
+        case VIR_DOMAIN_GRAPHICS_TYPE_DESKTOP:
+            virReportError(VIR_ERR_CONFIG_UNSUPPORTED,
+                           _("unsupported graphics type '%s'"),
+                           virDomainGraphicsTypeToString(graphics->type));
+            return -1;
+        case VIR_DOMAIN_GRAPHICS_TYPE_LAST:
+        default:
+            virReportEnumRangeError(virDomainGraphicsType, graphics->type);
+            return -1;
+        }
     }
 
     return 0;
@@ -8174,8 +8292,7 @@ qemuBuildVhostuserCommandLine(virQEMUDriverPtr driver,
                               virDomainDefPtr def,
                               virDomainNetDefPtr net,
                               virQEMUCapsPtr qemuCaps,
-                              unsigned int bootindex,
-                              bool chardevStdioLogd)
+                              unsigned int bootindex)
 {
     virQEMUDriverConfigPtr cfg = virQEMUDriverGetConfig(driver);
     char *chardev = NULL;
@@ -8195,8 +8312,7 @@ qemuBuildVhostuserCommandLine(virQEMUDriverPtr driver,
         if (!(chardev = qemuBuildChrChardevStr(logManager, secManager,
                                                cmd, cfg, def,
                                                net->data.vhostuser,
-                                               net->info.alias, qemuCaps, false,
-                                               chardevStdioLogd)))
+                                               net->info.alias, qemuCaps, 0)))
             goto cleanup;
         break;
 
@@ -8270,8 +8386,7 @@ qemuBuildInterfaceCommandLine(virQEMUDriverPtr driver,
                               virNetDevVPortProfileOp vmop,
                               bool standalone,
                               size_t *nnicindexes,
-                              int **nicindexes,
-                              bool chardevStdioLogd)
+                              int **nicindexes)
 {
     int ret = -1;
     char *nic = NULL, *host = NULL;
@@ -8394,8 +8509,7 @@ qemuBuildInterfaceCommandLine(virQEMUDriverPtr driver,
 
     case VIR_DOMAIN_NET_TYPE_VHOSTUSER:
         ret = qemuBuildVhostuserCommandLine(driver, logManager, secManager, cmd, def,
-                                            net, qemuCaps, bootindex,
-                                            chardevStdioLogd);
+                                            net, qemuCaps, bootindex);
         goto cleanup;
         break;
 
@@ -8579,8 +8693,7 @@ qemuBuildNetCommandLine(virQEMUDriverPtr driver,
                         bool standalone,
                         size_t *nnicindexes,
                         int **nicindexes,
-                        unsigned int *bootHostdevNet,
-                        bool chardevStdioLogd)
+                        unsigned int *bootHostdevNet)
 {
     size_t i;
     int last_good_net = -1;
@@ -8607,8 +8720,7 @@ qemuBuildNetCommandLine(virQEMUDriverPtr driver,
             if (qemuBuildInterfaceCommandLine(driver, logManager, secManager, cmd, def, net,
                                               qemuCaps, bootNet, vmop,
                                               standalone, nnicindexes,
-                                              nicindexes,
-                                              chardevStdioLogd) < 0)
+                                              nicindexes) < 0)
                 goto error;
 
             last_good_net = i;
@@ -8680,6 +8792,10 @@ qemuBuildSmartcardCommandLine(virLogManagerPtr logManager,
     virBuffer opt = VIR_BUFFER_INITIALIZER;
     const char *database;
     const char *contAlias = NULL;
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
 
     if (!def->nsmartcards)
         return 0;
@@ -8745,8 +8861,7 @@ qemuBuildSmartcardCommandLine(virLogManagerPtr logManager,
                                               cmd, cfg, def,
                                               smartcard->data.passthru,
                                               smartcard->info.alias,
-                                              qemuCaps, true,
-                                              chardevStdioLogd))) {
+                                              qemuCaps, cdevflags))) {
             virBufferFreeAndReset(&opt);
             return -1;
         }
@@ -8914,6 +9029,10 @@ qemuBuildShmemCommandLine(virLogManagerPtr logManager,
     virBuffer buf = VIR_BUFFER_INITIALIZER;
     char *devstr = NULL;
     int rc;
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
 
     if (shmem->size) {
         /*
@@ -8977,8 +9096,8 @@ qemuBuildShmemCommandLine(virLogManagerPtr logManager,
         devstr = qemuBuildChrChardevStr(logManager, secManager,
                                         cmd, cfg, def,
                                         &shmem->server.chr,
-                                        shmem->info.alias, qemuCaps, true,
-                                        chardevStdioLogd);
+                                        shmem->info.alias, qemuCaps,
+                                        cdevflags);
         if (!devstr)
             return -1;
 
@@ -9071,6 +9190,10 @@ qemuBuildSerialCommandLine(virLogManagerPtr logManager,
 {
     size_t i;
     bool havespice = false;
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
 
     if (def->nserials) {
         for (i = 0; i < def->ngraphics && !havespice; i++) {
@@ -9090,8 +9213,7 @@ qemuBuildSerialCommandLine(virLogManagerPtr logManager,
                                               cmd, cfg, def,
                                               serial->source,
                                               serial->info.alias,
-                                              qemuCaps, true,
-                                              chardevStdioLogd)))
+                                              qemuCaps, cdevflags)))
             return -1;
         virCommandAddArg(cmd, "-chardev");
         virCommandAddArg(cmd, devstr);
@@ -9132,6 +9254,10 @@ qemuBuildParallelsCommandLine(virLogManagerPtr logManager,
                               bool chardevStdioLogd)
 {
     size_t i;
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
 
     for (i = 0; i < def->nparallels; i++) {
         virDomainChrDefPtr parallel = def->parallels[i];
@@ -9141,8 +9267,7 @@ qemuBuildParallelsCommandLine(virLogManagerPtr logManager,
                                               cmd, cfg, def,
                                               parallel->source,
                                               parallel->info.alias,
-                                              qemuCaps, true,
-                                              chardevStdioLogd)))
+                                              qemuCaps, cdevflags)))
             return -1;
         virCommandAddArg(cmd, "-chardev");
         virCommandAddArg(cmd, devstr);
@@ -9167,6 +9292,10 @@ qemuBuildChannelsCommandLine(virLogManagerPtr logManager,
                              bool chardevStdioLogd)
 {
     size_t i;
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
 
     for (i = 0; i < def->nchannels; i++) {
         virDomainChrDefPtr channel = def->channels[i];
@@ -9178,8 +9307,7 @@ qemuBuildChannelsCommandLine(virLogManagerPtr logManager,
                                                   cmd, cfg, def,
                                                   channel->source,
                                                   channel->info.alias,
-                                                  qemuCaps, true,
-                                                  chardevStdioLogd)))
+                                                  qemuCaps, cdevflags)))
                 return -1;
             virCommandAddArg(cmd, "-chardev");
             virCommandAddArg(cmd, devstr);
@@ -9196,8 +9324,7 @@ qemuBuildChannelsCommandLine(virLogManagerPtr logManager,
                                                   cmd, cfg, def,
                                                   channel->source,
                                                   channel->info.alias,
-                                                  qemuCaps, true,
-                                                  chardevStdioLogd)))
+                                                  qemuCaps, cdevflags)))
                 return -1;
             virCommandAddArg(cmd, "-chardev");
             virCommandAddArg(cmd, devstr);
@@ -9223,6 +9350,10 @@ qemuBuildConsoleCommandLine(virLogManagerPtr logManager,
                             bool chardevStdioLogd)
 {
     size_t i;
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
 
     /* Explicit console devices */
     for (i = 0; i < def->nconsoles; i++) {
@@ -9241,8 +9372,7 @@ qemuBuildConsoleCommandLine(virLogManagerPtr logManager,
                                                   cmd, cfg, def,
                                                   console->source,
                                                   console->info.alias,
-                                                  qemuCaps, true,
-                                                  chardevStdioLogd)))
+                                                  qemuCaps, cdevflags)))
                 return -1;
             virCommandAddArg(cmd, "-chardev");
             virCommandAddArg(cmd, devstr);
@@ -9263,8 +9393,7 @@ qemuBuildConsoleCommandLine(virLogManagerPtr logManager,
                                                   cmd, cfg, def,
                                                   console->source,
                                                   console->info.alias,
-                                                  qemuCaps, true,
-                                                  chardevStdioLogd)))
+                                                  qemuCaps, cdevflags)))
                 return -1;
             virCommandAddArg(cmd, "-chardev");
             virCommandAddArg(cmd, devstr);
@@ -9279,8 +9408,7 @@ qemuBuildConsoleCommandLine(virLogManagerPtr logManager,
                                                   cmd, cfg, def,
                                                   console->source,
                                                   console->info.alias,
-                                                  qemuCaps, true,
-                                                  chardevStdioLogd)))
+                                                  qemuCaps, cdevflags)))
                 return -1;
             virCommandAddArg(cmd, "-chardev");
             virCommandAddArg(cmd, devstr);
@@ -9403,6 +9531,10 @@ qemuBuildRedirdevCommandLine(virLogManagerPtr logManager,
                              bool chardevStdioLogd)
 {
     size_t i;
+    unsigned int cdevflags = QEMU_BUILD_CHARDEV_TCP_NOWAIT |
+        QEMU_BUILD_CHARDEV_UNIX_FD_PASS;
+    if (chardevStdioLogd)
+        cdevflags |= QEMU_BUILD_CHARDEV_FILE_LOGD;
 
     for (i = 0; i < def->nredirdevs; i++) {
         virDomainRedirdevDefPtr redirdev = def->redirdevs[i];
@@ -9412,8 +9544,7 @@ qemuBuildRedirdevCommandLine(virLogManagerPtr logManager,
                                               cmd, cfg, def,
                                               redirdev->source,
                                               redirdev->info.alias,
-                                              qemuCaps, true,
-                                              chardevStdioLogd))) {
+                                              qemuCaps, cdevflags))) {
             return -1;
         }
 
@@ -9963,6 +10094,7 @@ qemuBuildCommandLineValidate(virQEMUDriverPtr driver,
     int sdl = 0;
     int vnc = 0;
     int spice = 0;
+    int egl_headless = 0;
 
     if (!virQEMUDriverIsPrivileged(driver)) {
         /* If we have no cgroups then we can have no tunings that
@@ -10004,6 +10136,9 @@ qemuBuildCommandLineValidate(virQEMUDriverPtr driver,
         case VIR_DOMAIN_GRAPHICS_TYPE_SPICE:
             ++spice;
             break;
+        case VIR_DOMAIN_GRAPHICS_TYPE_EGL_HEADLESS:
+            ++egl_headless;
+            break;
         case VIR_DOMAIN_GRAPHICS_TYPE_RDP:
         case VIR_DOMAIN_GRAPHICS_TYPE_DESKTOP:
         case VIR_DOMAIN_GRAPHICS_TYPE_LAST:
@@ -10011,10 +10146,10 @@ qemuBuildCommandLineValidate(virQEMUDriverPtr driver,
         }
     }
 
-    if (sdl > 1 || vnc > 1 || spice > 1) {
+    if (sdl > 1 || vnc > 1 || spice > 1 || egl_headless > 1) {
         virReportError(VIR_ERR_CONFIG_UNSUPPORTED, "%s",
                        _("only 1 graphics device of each type "
-                         "(sdl, vnc, spice) is supported"));
+                         "(sdl, vnc, spice, headless) is supported"));
         return -1;
     }
 
@@ -10269,8 +10404,7 @@ qemuBuildCommandLine(virQEMUDriverPtr driver,
 
     if (qemuBuildNetCommandLine(driver, logManager, secManager, cmd, def,
                                 qemuCaps, vmop, standalone,
-                                nnicindexes, nicindexes, &bootHostdevNet,
-                                chardevStdioLogd) < 0)
+                                nnicindexes, nicindexes, &bootHostdevNet) < 0)
         goto error;
 
     if (qemuBuildSmartcardCommandLine(logManager, secManager, cmd, cfg, def, qemuCaps,
@@ -10299,11 +10433,8 @@ qemuBuildCommandLine(virQEMUDriverPtr driver,
     if (qemuBuildInputCommandLine(cmd, def, qemuCaps) < 0)
         goto error;
 
-    for (i = 0; i < def->ngraphics; ++i) {
-        if (qemuBuildGraphicsCommandLine(cfg, cmd, qemuCaps,
-                                         def->graphics[i]) < 0)
-            goto error;
-    }
+    if (qemuBuildGraphicsCommandLine(cfg, cmd, def, qemuCaps) < 0)
+        goto error;
 
     if (qemuBuildVideoCommandLine(cmd, def, qemuCaps) < 0)
         goto error;
@@ -10478,7 +10609,7 @@ qemuBuildChannelChrDeviceStr(char **deviceStr,
         port = virSocketAddrGetPort(chr->target.addr);
 
         if (virAsprintf(deviceStr,
-                        "user,guestfwd=tcp:%s:%i-chardev:char%s,id=user-%s",
+                        "user,guestfwd=tcp:%s:%i-chardev:char%s,id=%s",
                         addr, port, chr->info.alias, chr->info.alias) < 0)
             goto cleanup;
         break;

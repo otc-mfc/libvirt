@@ -1670,6 +1670,21 @@ qemuMonitorEmitDumpCompleted(qemuMonitorPtr mon,
 
 
 int
+qemuMonitorEmitPRManagerStatusChanged(qemuMonitorPtr mon,
+                                      const char *prManager,
+                                      bool connected)
+{
+    int ret = -1;
+    VIR_DEBUG("mon=%p, prManager='%s', connected=%d", mon, prManager, connected);
+
+    QEMU_MONITOR_CALLBACK(mon, ret, domainPRManagerStatusChanged,
+                          mon->vm, prManager, connected);
+
+    return ret;
+}
+
+
+int
 qemuMonitorSetCapabilities(qemuMonitorPtr mon)
 {
     QEMU_CHECK_MONITOR(mon);
@@ -2947,8 +2962,10 @@ qemuMonitorDriveDel(qemuMonitorPtr mon,
 
     QEMU_CHECK_MONITOR(mon);
 
-    /* there won't be a direct replacement for drive_del in QMP */
-    return qemuMonitorTextDriveDel(mon, drivestr);
+    if (mon->json)
+        return qemuMonitorJSONDriveDel(mon, drivestr);
+    else
+        return qemuMonitorTextDriveDel(mon, drivestr);
 }
 
 
@@ -3073,8 +3090,9 @@ qemuMonitorCreateObjectProps(virJSONValuePtr *propsret,
 /**
  * qemuMonitorAddObject:
  * @mon: Pointer to monitor object
- * @props: Optional arguments for the given type. The object is consumed and
- *         the pointer is cleared.
+ * @props: Pointer to a JSON object holding configuration of the object to add.
+ *         The object must be non-null and contain at least the "qom-type" and
+ *         "id" field. The object is consumed and the pointer is cleared.
  * @alias: If not NULL, returns the alias of the added object if it was added
  *         successfully to qemu. Caller should free the returned pointer.
  *
@@ -3085,18 +3103,28 @@ qemuMonitorAddObject(qemuMonitorPtr mon,
                      virJSONValuePtr *props,
                      char **alias)
 {
-    const char *type = virJSONValueObjectGetString(*props, "qom-type");
-    const char *id = virJSONValueObjectGetString(*props, "id");
+    const char *type = NULL;
+    const char *id = NULL;
     char *tmp = NULL;
     int ret = -1;
+
+    if (!*props) {
+        virReportError(VIR_ERR_INTERNAL_ERROR, "%s",
+                       _("object props can't be NULL"));
+        goto cleanup;
+    }
+
+    type = virJSONValueObjectGetString(*props, "qom-type");
+    id = virJSONValueObjectGetString(*props, "id");
 
     VIR_DEBUG("type=%s id=%s", NULLSTR(type), NULLSTR(id));
 
     QEMU_CHECK_MONITOR_GOTO(mon, cleanup);
 
-    if (!id) {
+    if (!id || !type) {
         virReportError(VIR_ERR_INTERNAL_ERROR,
-                       _("missing alias for qemu object '%s'"), NULLSTR(type));
+                       _("missing alias or qom-type for qemu object '%s'"),
+                       NULLSTR(type));
         goto cleanup;
     }
 
@@ -3137,8 +3165,10 @@ qemuMonitorAddDrive(qemuMonitorPtr mon,
 
     QEMU_CHECK_MONITOR(mon);
 
-    /* there won't ever be a direct QMP replacement for this function */
-    return qemuMonitorTextAddDrive(mon, drivestr);
+    if (mon->json)
+        return qemuMonitorJSONAddDrive(mon, drivestr);
+    else
+        return qemuMonitorTextAddDrive(mon, drivestr);
 }
 
 
@@ -3337,6 +3367,19 @@ qemuMonitorSendKey(qemuMonitorPtr mon,
     QEMU_CHECK_MONITOR(mon);
 
     return qemuMonitorJSONSendKey(mon, holdtime, keycodes, nkeycodes);
+}
+
+
+int
+qemuMonitorScreendumpRH(qemuMonitorPtr mon,
+                        const char *device,
+                        const char *file)
+{
+    VIR_DEBUG("device=%s, file=%s", device, file);
+
+    QEMU_CHECK_MONITOR(mon);
+
+    return qemuMonitorJSONScreendumpRH(mon, device, file);
 }
 
 
@@ -4319,4 +4362,29 @@ qemuMonitorGetSEVMeasurement(qemuMonitorPtr mon)
     QEMU_CHECK_MONITOR_NULL(mon);
 
     return qemuMonitorJSONGetSEVMeasurement(mon);
+}
+
+
+int
+qemuMonitorGetPRManagerInfo(qemuMonitorPtr mon,
+                            virHashTablePtr *retinfo)
+{
+    int ret = -1;
+    virHashTablePtr info = NULL;
+
+    *retinfo = NULL;
+
+    QEMU_CHECK_MONITOR(mon);
+
+    if (!(info = virHashCreate(10, virHashValueFree)))
+        goto cleanup;
+
+    if (qemuMonitorJSONGetPRManagerInfo(mon, info) < 0)
+        goto cleanup;
+
+    VIR_STEAL_PTR(*retinfo, info);
+    ret = 0;
+ cleanup:
+    virHashFree(info);
+    return ret;
 }

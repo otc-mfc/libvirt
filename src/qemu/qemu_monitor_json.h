@@ -238,6 +238,12 @@ int qemuMonitorJSONAddObject(qemuMonitorPtr mon,
 int qemuMonitorJSONDelObject(qemuMonitorPtr mon,
                              const char *objalias);
 
+int qemuMonitorJSONAddDrive(qemuMonitorPtr mon,
+                            const char *drivestr);
+
+int qemuMonitorJSONDriveDel(qemuMonitorPtr mon,
+                            const char *drivestr);
+
 int qemuMonitorJSONDiskSnapshot(qemuMonitorPtr mon,
                                 virJSONValuePtr actions,
                                 const char *device,
@@ -296,6 +302,10 @@ int qemuMonitorJSONSendKey(qemuMonitorPtr mon,
                            unsigned int holdtime,
                            unsigned int *keycodes,
                            unsigned int nkeycodes);
+
+int qemuMonitorJSONScreendumpRH(qemuMonitorPtr mon,
+                                const char *id,
+                                const char *file);
 
 int qemuMonitorJSONScreendump(qemuMonitorPtr mon,
                               const char *device,
@@ -548,6 +558,10 @@ int qemuMonitorJSONBlockdevAdd(qemuMonitorPtr mon,
 
 int qemuMonitorJSONBlockdevDel(qemuMonitorPtr mon,
                                const char *nodename)
+    ATTRIBUTE_NONNULL(1) ATTRIBUTE_NONNULL(2);
+
+int qemuMonitorJSONGetPRManagerInfo(qemuMonitorPtr mon,
+                                    virHashTablePtr info)
     ATTRIBUTE_NONNULL(1) ATTRIBUTE_NONNULL(2);
 
 #endif /* QEMU_MONITOR_JSON_H */

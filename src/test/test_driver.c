@@ -657,7 +657,7 @@ testDomainStartState(testDriverPtr privconn,
 
     if (virDomainObjSetDefTransient(privconn->caps,
                                     privconn->xmlopt,
-                                    dom) < 0) {
+                                    dom, NULL) < 0) {
         goto cleanup;
     }
 
@@ -849,6 +849,7 @@ testParseDomainSnapshots(testDriverPtr privconn,
         def = virDomainSnapshotDefParseNode(ctxt->doc, node,
                                             privconn->caps,
                                             privconn->xmlopt,
+                                            NULL,
                                             VIR_DOMAIN_SNAPSHOT_PARSE_DISKS |
                                             VIR_DOMAIN_SNAPSHOT_PARSE_INTERNAL |
                                             VIR_DOMAIN_SNAPSHOT_PARSE_REDEFINE);
@@ -6403,6 +6404,7 @@ testDomainSnapshotCreateXML(virDomainPtr domain,
     if (!(def = virDomainSnapshotDefParseString(xmlDesc,
                                                 privconn->caps,
                                                 privconn->xmlopt,
+                                                NULL,
                                                 parse_flags)))
         goto cleanup;
 
@@ -6806,7 +6808,6 @@ testDomainRevertToSnapshot(virDomainSnapshotPtr snapshot,
 
     return ret;
 }
-
 
 
 static virHypervisorDriver testHypervisorDriver = {

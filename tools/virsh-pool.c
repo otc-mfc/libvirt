@@ -140,6 +140,10 @@
     {.name = "adapter-parent-fabric-wwn", \
      .type = VSH_OT_STRING, \
      .help = N_("adapter parent scsi_hostN fabric_wwn to be used for underlying vHBA storage") \
+    }, \
+    {.name = "source-protocol-ver", \
+     .type = VSH_OT_STRING, \
+     .help = N_("nfsvers value for NFS pool mount option") \
     }
 
 virStoragePoolPtr
@@ -323,7 +327,7 @@ virshBuildPoolXML(vshControl *ctl,
                *secretUsage = NULL, *adapterName = NULL, *adapterParent = NULL,
                *adapterWwnn = NULL, *adapterWwpn = NULL, *secretUUID = NULL,
                *adapterParentWwnn = NULL, *adapterParentWwpn = NULL,
-               *adapterParentFabricWwn = NULL;
+               *adapterParentFabricWwn = NULL, *protoVer = NULL;
     virBuffer buf = VIR_BUFFER_INITIALIZER;
 
     VSH_EXCLUSIVE_OPTIONS("secret-usage", "secret-uuid");
@@ -349,7 +353,8 @@ virshBuildPoolXML(vshControl *ctl,
         vshCommandOptStringReq(ctl, cmd, "adapter-parent", &adapterParent) < 0 ||
         vshCommandOptStringReq(ctl, cmd, "adapter-parent-wwnn", &adapterParentWwnn) < 0 ||
         vshCommandOptStringReq(ctl, cmd, "adapter-parent-wwpn", &adapterParentWwpn) < 0 ||
-        vshCommandOptStringReq(ctl, cmd, "adapter-parent-fabric-wwn", &adapterParentFabricWwn) < 0)
+        vshCommandOptStringReq(ctl, cmd, "adapter-parent-fabric-wwn", &adapterParentFabricWwn) < 0 ||
+        vshCommandOptStringReq(ctl, cmd, "source-protocol-ver", &protoVer) < 0)
         goto cleanup;
 
     virBufferAsprintf(&buf, "<pool type='%s'>\n", type);
@@ -371,7 +376,7 @@ virshBuildPoolXML(vshControl *ctl,
             if (adapterParent)
                 virBufferAsprintf(&buf, " parent='%s'", adapterParent);
             else if (adapterParentWwnn && adapterParentWwpn)
-                virBufferAsprintf(&buf, " parent_wwnn='%s' parent_wwnn='%s'",
+                virBufferAsprintf(&buf, " parent_wwnn='%s' parent_wwpn='%s'",
                                   adapterParentWwnn, adapterParentWwpn);
             else if (adapterParentFabricWwn)
                 virBufferAsprintf(&buf, " parent_fabric_wwn='%s'",
@@ -397,6 +402,9 @@ virshBuildPoolXML(vshControl *ctl,
             virBufferAsprintf(&buf, "<format type='%s'/>\n", srcFormat);
         if (srcName)
             virBufferAsprintf(&buf, "<name>%s</name>\n", srcName);
+
+        if (protoVer)
+            virBufferAsprintf(&buf, "<protocol ver='%s'/>\n", protoVer);
 
         virBufferAdjustIndent(&buf, -2);
         virBufferAddLit(&buf, "</source>\n");

@@ -1092,7 +1092,7 @@ static int umlStartVMDaemon(virConnectPtr conn,
      * report implicit runtime defaults in the XML, like vnc listen/socket
      */
     VIR_DEBUG("Setting current domain def as transient");
-    if (virDomainObjSetDefTransient(driver->caps, driver->xmlopt, vm) < 0) {
+    if (virDomainObjSetDefTransient(driver->caps, driver->xmlopt, vm, NULL) < 0) {
         VIR_FORCE_CLOSE(logfd);
         return -1;
     }
@@ -2089,7 +2089,7 @@ static int umlDomainAttachDevice(virDomainPtr dom, const char *xml)
     }
 
     dev = virDomainDeviceDefParse(xml, vm->def, driver->caps, driver->xmlopt,
-                                  VIR_DOMAIN_DEF_PARSE_INACTIVE);
+                                  NULL, VIR_DOMAIN_DEF_PARSE_INACTIVE);
 
     if (dev == NULL)
         goto cleanup;
@@ -2202,6 +2202,7 @@ static int umlDomainDetachDevice(virDomainPtr dom, const char *xml)
     }
 
     dev = virDomainDeviceDefParse(xml, vm->def, driver->caps, driver->xmlopt,
+                                  NULL,
                                   VIR_DOMAIN_DEF_PARSE_INACTIVE |
                                   VIR_DOMAIN_DEF_PARSE_SKIP_VALIDATE);
     if (dev == NULL)

@@ -3016,8 +3016,14 @@ virNetDevRDMAFeature(const char *ifname,
 
     if (virAsprintf(&eth_devpath, SYSFS_NET_DIR "%s/device/resource", ifname) < 0)
         goto cleanup;
-    if (!virFileExists(eth_devpath))
+
+    /* If /sys/class/net/<ifname>/device/resource doesn't exist it is not a PCI
+     * device and therefore it will not have RDMA. */
+    if (!virFileExists(eth_devpath)) {
+        ret = 0;
         goto cleanup;
+    }
+
     if (virFileReadAll(eth_devpath, RESOURCE_FILE_LEN, &eth_res_buf) < 0)
         goto cleanup;
 
@@ -3393,7 +3399,14 @@ virNetDevGetEthtoolGFeatures(virBitmapPtr bitmap ATTRIBUTE_UNUSED,
 # endif
 
 
-# if HAVE_DECL_ETHTOOL_SCOALESCE && HAVE_DECL_ETHTOOL_GCOALESCE
+/* Workaround for binary distributions building on old kernels */
+# ifndef ETHTOOL_GCOALESCE
+#  define ETHTOOL_GCOALESCE 0x0000000e
+# endif
+# ifndef ETHTOOL_SCOALESCE
+#  define ETHTOOL_SCOALESCE 0x0000000f
+# endif
+
 /**
  * virNetDevSetCoalesce:
  * @ifname: interface name to modify
@@ -3493,20 +3506,6 @@ int virNetDevSetCoalesce(const char *ifname,
     VIR_FORCE_CLOSE(fd);
     return ret;
 }
-# else
-int virNetDevSetCoalesce(const char *ifname,
-                         virNetDevCoalescePtr coalesce,
-                         bool update)
-{
-    if (!coalesce && !update)
-        return 0;
-
-    virReportSystemError(ENOSYS,
-                         _("Cannot set coalesce info on interface '%s'"),
-                         ifname);
-    return -1;
-}
-# endif
 
 
 /**

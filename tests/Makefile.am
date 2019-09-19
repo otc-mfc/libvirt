@@ -122,7 +122,7 @@ EXTRA_DIST = \
 	qemuargv2xmldata \
 	qemublocktestdata \
 	qemucapabilitiesdata \
-	qemucaps2xmldata \
+	qemucaps2xmloutdata \
 	qemuhotplugtestcpus \
 	qemuhotplugtestdevices \
 	qemuhotplugtestdomains \
@@ -141,6 +141,7 @@ EXTRA_DIST = \
 	storagepoolschemadata \
 	storagepoolxml2xmlin \
 	storagepoolxml2xmlout \
+	storagepoolxml2argvdata \
 	storagevolschemadata \
 	storagevolxml2argvdata \
 	storagevolxml2xmlin \
@@ -242,6 +243,7 @@ test_libraries += virusbmock.la \
 	virnetdevbandwidthmock.la \
 	virnumamock.la \
 	virtestmock.la \
+	virfilemock.la \
 	$(NULL)
 endif WITH_LINUX
 
@@ -362,6 +364,7 @@ endif WITH_NWFILTER
 
 if WITH_STORAGE
 test_programs += storagevolxml2argvtest
+test_programs += storagepoolxml2argvtest
 test_programs += virstorageutiltest
 endif WITH_STORAGE
 
@@ -589,7 +592,8 @@ qemuxml2xmltest_LDADD = $(qemu_LDADDS) $(LDADDS)
 qemuargv2xmltest_SOURCES = \
 	qemuargv2xmltest.c testutilsqemu.c testutilsqemu.h \
 	testutils.c testutils.h
-qemuargv2xmltest_LDADD = $(qemu_LDADDS) $(LDADDS)
+qemuargv2xmltest_LDADD = libqemutestdriver.la \
+	$(LDADDS)
 
 qemumonitorjsontest_SOURCES = \
 	qemumonitorjsontest.c \
@@ -900,6 +904,16 @@ storagevolxml2argvtest_LDADD = \
 	../src/libvirt_util.la \
 	$(LDADDS)
 
+storagepoolxml2argvtest_SOURCES = \
+    storagepoolxml2argvtest.c \
+    testutils.c testutils.h
+storagepoolxml2argvtest_LDADD = \
+	$(LIBXML_LIBS) \
+	../src/libvirt_driver_storage_impl.la \
+	../src/libvirt_conf.la \
+	../src/libvirt_util.la \
+	$(LDADDS)
+
 else ! WITH_STORAGE
 EXTRA_DIST += storagevolxml2argvtest.c
 EXTRA_DIST += virstorageutiltest.c
@@ -1163,9 +1177,13 @@ virresctrltest_SOURCES = \
 	virresctrltest.c testutils.h testutils.c virfilewrapper.h virfilewrapper.c
 virresctrltest_LDADD = $(LDADDS)
 
+virfilemock_la_SOURCES = \
+	virfilemock.c
+virfilemock_la_LDFLAGS = $(MOCKLIBS_LDFLAGS)
+virfilemock_la_LIBADD = $(MOCKLIBS_LIBS)
 else ! WITH_LINUX
 EXTRA_DIST += vircaps2xmltest.c virnumamock.c virfilewrapper.c \
-			  virfilewrapper.h virresctrltest.c
+			  virfilewrapper.h virresctrltest.c virfilemock.c
 endif ! WITH_LINUX
 
 if WITH_NSS
