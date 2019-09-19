@@ -1,0 +1,87 @@
+<domain xmlns:sre="http://libvirt.org/schemas/domain/sre/1.0" type="sre">
+ <name>sretest</name>
+ <uuid>4e606bf5-75b1-4290-94ea-e0abb40831e1</uuid>
+ <title>Linux</title>
+ <description>Domain used to run Linux Test Project on the given Linux kernel.</description>
+ <metadata/>
+ <memory unit="KiB">8388608</memory>
+ <currentMemory unit="KiB">8388608</currentMemory>
+ <vcpu placement="static">8</vcpu>
+ <os>
+  <type arch="x86_64">hvm</type>
+  <kernel>/mnt/oagwy/kernel_for_manifest/vmlinuz-3.10.0-862.14.4.el7.x86_64</kernel>
+  <initrd>/mnt/oagwy/kernel_for_manifest/initramfs-3.10.0-862.14.4.el7.x86_64.img</initrd>
+  <cmdline>root={ROOT_FS} ro crashkernel=auto LANG=en_US.UTF-8 rw console=ttyS0,115200n8</cmdline>
+  <boot dev="hd"/>
+ </os>
+ <features>
+  <apic/>
+  <pae/>
+  <pmu state="off"/>
+ </features>
+ <cpu mode="host-model">
+  <model fallback="allow"/>
+ </cpu>
+ <clock offset="utc"/>
+ <on_poweroff>destroy</on_poweroff>
+ <on_reboot>restart</on_reboot>
+ <on_crash>destroy</on_crash>
+ <devices>
+  <serial type="dev">
+   <source path="com1"/>
+   <target port="0"/>
+  </serial>
+  <serial type="null">
+   <target port="1"/>
+  </serial>
+  <serial type="null">
+   <target port="2"/>
+  </serial>
+  <serial type="null">
+   <target port="3"/>
+  </serial>
+  <console type="dev">
+   <source path="com1"/>
+   <target port="0" type="serial"/>
+  </console>
+  <hostdev mode="subsystem" managed="yes" type="pci">
+   <source>
+    <address domain="0x0000" bus="0x00" function="0x0" slot="0x01"/>
+   </source>
+  </hostdev>
+  <iommu model="intel">
+   <driver intremap="off"/>
+  </iommu>
+ </devices>
+ <sre:policy>
+  <sre:ostype>Linux</sre:ostype>
+  <sre:paging>Off</sre:paging>
+  <sre:secure>On</sre:secure>
+  <sre:cacheWays>1</sre:cacheWays>
+  <sre:dmaSize unit="MiB">1</sre:dmaSize>
+  <sre:hashPageThreshold unit="KiB">1</sre:hashPageThreshold>
+  <sre:devicePolicy action="allow">reset</sre:devicePolicy>
+  <sre:devicePolicy action="unassigned">event_reporter</sre:devicePolicy>
+  <sre:devicePolicy action="violate_report_continue">lpc</sre:devicePolicy>
+  <sre:devicePolicy action="allow_null">ppin</sre:devicePolicy>
+  <sre:featurePolicy action="allow">sw_debugger</sre:featurePolicy>
+  <sre:exception action="allow">pf</sre:exception>
+  <sre:exception action="allow">gp</sre:exception>
+  <sre:exception action="allow">bp</sre:exception>
+  <sre:exception action="allow">ud</sre:exception>
+  <sre:hostdev startupPolicy="optional" type="pci">
+   <sre:address domain="0x0000" bus="0x00" function="0x0" slot="0x01"/>
+   <sre:vendor>0x8086</sre:vendor>
+   <sre:device>0x6F50</sre:device>
+   <sre:dmaBlocked>no</sre:dmaBlocked>
+  </sre:hostdev>
+  <sre:domainSalt>93cce3dab3807ca4902201e131e6b09d887d34c1a20cd3e89eb7115f2d415012</sre:domainSalt>
+  <sre:serial action="allow_shared">0</sre:serial>
+  <sre:serial action="allow_null">1</sre:serial>
+  <sre:serial action="allow_null">2</sre:serial>
+  <sre:serial action="allow_null">3</sre:serial>
+  <sre:ph_domain_info>d16666044c4d5f445f484452e75566044d666604e75566040f0000000000000002000000</sre:ph_domain_info>
+  <sre:ph_domain_sha>75bc348ece8ec703d6e0af430a8cfc128e805bb3ea59b915d99bcbed97887815</sre:ph_domain_sha>
+  <sre:ph_domain_sig>608ce29bae9303e09dfb81c119cf72b9e43e2ea5ea627039c2d2473c63493286bb1a7327eac05b1214e17f1e2fa0e1804dcf129b453dddb61b87311d1b516dab</sre:ph_domain_sig>
+ </sre:policy>
+</domain>

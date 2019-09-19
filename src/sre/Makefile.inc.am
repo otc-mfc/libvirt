@@ -1,0 +1,183 @@
+SRE_MONITOR_PROTOCOL_GENERATED = \
+	sre/sre_monitor_protocol.h \
+	sre/sre_monitor_protocol.c \
+	$(NULL)
+
+SRE_MONITOR_GENERATED = \
+	sre/sre_monitor_dispatch.h \
+	$(NULL)
+
+SRE_CONTROLLER_GENERATED = \
+	sre/sre_controller_dispatch.h \
+	$(NULL)
+
+SRE_GENERATED = \
+	$(SRE_MONITOR_PROTOCOL_GENERATED) \
+	$(SRE_MONITOR_GENERATED) \
+	$(SRE_CONTROLLER_GENERATED) \
+	$(NULL)
+
+SRE_MONITOR_PROTOCOL = $(srcdir)/sre/sre_monitor_protocol.x
+
+SRE_DRIVER_SOURCES = \
+	$(SRE_MONITOR_PROTOCOL_GENERATED) \
+	$(SRE_MONITOR_GENERATED) \
+	sre/sre_driver.c \
+	sre/sre_driver.h \
+	sre/sre_domain.c \
+	sre/sre_domain.h \
+	sre/sre_conf.c \
+	sre/sre_conf.h \
+	sre/sre_hostdev.c \
+	sre/sre_hostdev.h \
+	sre/sre_monitor.c \
+	sre/sre_monitor.h \
+	sre/sre_process_domain.c \
+	sre/sre_process_domain.h \
+	sre/sre_domain_portal.c \
+	sre/sre_domain_portal.h \
+	sre/sre_driver_access.h \
+	sre/domain_format.h \
+	sre/sre_internal_policy.h \
+	sre/sre_internal_policy.h \
+	sre/se_protocol.h \
+	sre/sre_internal_types.h \
+	util/virpci.c \
+	util/virpci.h \
+	$(NULL)
+
+SRE_CONTROLLER_SOURCES = \
+	$(SRE_MONITOR_PROTOCOL_GENERATED) \
+	$(SRE_CONTROLLER_GENERATED) \
+	sre/sre_conf.c \
+	sre/sre_conf.h \
+	sre/sre_domain.c \
+	sre/sre_domain.h \
+	sre/sre_controller.c \
+	sre/sre_evt_ctl_socket.c \
+	sre/sre_evt_ctl_socket.h
+	$(NULL)
+
+DRIVER_SOURCE_FILES += $(SRE_DRIVER_SOURCES)
+STATEFUL_DRIVER_SOURCE_FILES += $(SRE_DRIVER_SOURCES)
+EXTRA_DIST += $(SRE_DRIVER_SOURCES) \ 
+	$(SRE_MONITOR_PROTOCOL) \
+	$(SRE_GENERATED) \
+	$(SRE_CONTROLLER_SOURCES) \
+	$(NULL)
+
+BUILT_SOURCES += $(SRE_GENERATED)
+CLEANFILES += $(SRE_GENERATED)
+
+if WITH_SRE
+noinst_LTLIBRARIES += libvirt_driver_sre_impl.la
+libvirt_driver_sre_la_SOURCES =
+libvirt_driver_sre_la_LIBADD = libvirt_driver_sre_impl.la
+mod_LTLIBRARIES += libvirt_driver_sre.la
+libvirt_driver_sre_la_LIBADD += ../gnulib/lib/libgnu.la
+libvirt_driver_sre_la_LDFLAGS = -module -avoid-version $(AM_LDFLAGS)
+
+libexec_PROGRAMS += libvirt_sre
+
+libvirt_sre_SOURCES = \
+	$(SRE_CONTROLLER_SOURCES) \
+	$(DATATYPES_SOURCES) \
+	$(NULL)
+
+libvirt_sre_LDFLAGS = \
+	$(AM_LDFLAGS) \
+	$(PIE_LDFLAGS) \
+	$(CAPNG_LIBS) \
+	$(LIBXML_LIBS) \
+	$(NULL)
+libvirt_sre_LDADD = \
+	libvirt.la \
+	$(FUSE_LIBS) \
+	../gnulib/lib/libgnu.la \
+	$(NULL)
+if WITH_DTRACE_PROBES
+libvirt_sre_LDADD += libvirt_probes.lo
+endif WITH_DTRACE_PROBES
+libvirt_sre_LDADD += $(SECDRIVER_LIBS)
+libvirt_sre_CFLAGS = \
+	-I$(srcdir)/conf \
+	$(AM_CFLAGS) \
+	$(PIE_CFLAGS) \
+	$(CAPNG_CFLAGS) \
+	$(LIBXML_CFLAGS) \
+	$(LIBNL_CFLAGS) \
+	$(FUSE_CFLAGS) \
+	$(DBUS_CFLAGS) \
+	$(XDR_CFLAGS) \
+	$(NULL)
+if WITH_BLKID
+libvirt_sre_CFLAGS += $(BLKID_CFLAGS)
+libvirt_sre_LDADD += $(BLKID_LIBS)
+endif WITH_BLKID
+libvirt_sre_CFLAGS += $(SECDRIVER_CFLAGS)
+	
+libvirt_driver_sre_impl_la_CFLAGS = \
+                $(LIBNL_CFLAGS) \
+                $(FUSE_CFLAGS) \
+                $(XDR_CFLAGS) \
+                -I$(srcdir)/access \
+                -I$(srcdir)/conf \
+                -I$(srcdir)/util \
+                $(AM_CFLAGS)
+libvirt_driver_sre_impl_la_LIBADD = \
+               $(CAPNG_LIBS) \
+               $(LIBNL_LIBS) \
+               $(LIBXML_LIBS) \
+               $(FUSE_LIBS)
+
+libvirt_sre_LDADD = \
+	libvirt.la \
+	../gnulib/lib/libgnu.la \
+	$(NULL)
+
+if WITH_BLKID
+libvirt_driver_sre_impl_la_CFLAGS += $(BLKID_CFLAGS)
+libvirt_driver_sre_impl_la_LIBADD += $(BLKID_LIBS)
+libvirt_sre_LDADD += $(BLKID_LIBS)
+endif WITH_BLKID
+
+libvirt_driver_sre_impl_la_LIBADD += $(SECDRIVER_LIBS)
+libvirt_driver_sre_impl_la_SOURCES = $(SRE_DRIVER_SOURCES)
+
+
+libvirt_sre_LDADD += $(SECDRIVER_LIBS)
+
+if WITH_DTRACE_PROBES
+RPC_PROBE_FILES += $(srcdir)/sre/sre_monitor_protocol.x
+endif
+
+INSTALL_DATA_DIRS += sre
+
+install-data-sre:
+	$(MKDIR_P) "$(DESTDIR)$(localstatedir)/lib/libvirt/sre"
+	$(MKDIR_P) "$(DESTDIR)$(localstatedir)/run/libvirt/sre"
+	$(MKDIR_P) "$(DESTDIR)$(localstatedir)/log/libvirt/sre"
+
+uninstall-data-sre:
+	rmdir "$(DESTDIR)$(localstatedir)/lib/libvirt/sre" ||:
+	rmdir "$(DESTDIR)$(localstatedir)/run/libvirt/sre" ||:
+	rmdir "$(DESTDIR)$(localstatedir)/log/libvirt/sre" ||:
+
+endif WITH_SRE
+
+
+sre/sre_monitor_dispatch.h: $(srcdir)/rpc/gendispatch.pl \
+		$(SRE_MONITOR_PROTOCOL) Makefile.am
+	$(AM_V_GEN)$(PERL) -w $(srcdir)/rpc/gendispatch.pl --mode=client \
+	  virSREMonitor VIR_SRE_MONITOR $(SRE_MONITOR_PROTOCOL) > \
+	  $(srcdir)/sre/sre_monitor_dispatch.h
+sre/sre_controller_dispatch.h: $(srcdir)/rpc/gendispatch.pl \
+		$(REMOTE_PROTOCOL) Makefile.am
+	$(AM_V_GEN)$(PERL) -w $(srcdir)/rpc/gendispatch.pl --mode=server \
+	  virSREMonitor VIR_SRE_MONITOR $(SRE_MONITOR_PROTOCOL) > \
+	  $(srcdir)/sre/sre_controller_dispatch.h
+
+.PHONY: \
+	install-data-sre \
+	uninstall-data-sre \
+	$(NULL)

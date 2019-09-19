@@ -73,6 +73,9 @@
           <ref name='qemucmdline'/>
         </optional>
         <optional>
+          <ref name='srepolicy'/>
+        </optional>
+        <optional>
           <ref name='lxcsharens'/>
         </optional>
         <optional>
@@ -213,6 +216,7 @@
         <value>phyp</value>
         <value>vz</value>
         <value>bhyve</value>
+        <value>sre</value>
       </choice>
     </attribute>
   </define>
@@ -6001,6 +6005,294 @@
     </element>
   </define>
 
+  <define name="sreactiontype">
+    <attribute name="action">
+      <choice>
+        <value>violate_report_kill</value>
+        <value>violate_report_continue</value>
+        <value>violate_kill</value>
+        <value>allow_null</value>
+        <value>allow</value>
+        <value>allow_shared</value>
+        <value>allow_passthrough</value>
+      </choice>
+    </attribute>
+  </define>
+  
+  <define name="sreactionserial">
+    <attribute name="action">
+      <choice>
+        <value>violate_report_kill</value>
+        <value>violate_report_continue</value>
+        <value>violate_kill</value>
+        <value>allow_null</value>
+        <value>allow_shared</value>
+        <value>allow_passthrough</value>
+        <value>allow_bridged</value>
+      </choice>
+    </attribute>
+  </define>
+
+  <define name="sredevassign">
+    <attribute name="action">
+      <choice>
+        <value>assigned</value>
+        <value>unassigned</value>
+      </choice>
+    </attribute>
+  </define>
+
+  <define name="srefeaturepolicy">
+    <element name="policy">
+      <ref name="sreactiontype"/>
+      <choice>
+        <value>overhead_monitor</value>
+        <value>power_management</value>
+        <value>x2apic</value>
+        <value>sw_debugger</value>
+        <value>tm</value>
+        <value>tm2</value>
+        <value>acpi</value>
+      </choice>
+    </element>
+  </define>
+
+  <define name="sreserial">
+    <choice>
+      <value>0</value>
+      <value>1</value>
+      <value>2</value>
+      <value>3</value>
+    </choice>
+  </define>
+
+  <define name="pChannelId">
+    <data type="integer"/>
+  </define>
+
+
+  <define name="sreDomainHeaderInfo">
+    <data type="string">
+      <param name="pattern">[0-9a-fA-F]{72}</param>
+    </data>
+  </define>
+  <define name="sreDomainHeaderSHA">
+    <data type="string">
+      <param name="pattern">[0-9a-fA-F]{64}</param>
+    </data>
+  </define>
+  <define name="sreDomainSalt">
+    <data type="string">
+      <param name="pattern">[0-9a-fA-F]{64}</param>
+    </data>
+  </define>
+  <define name="sreDomainHeaderSIG">
+    <data type="string">
+      <param name="pattern">[0-9a-fA-F]{128}</param>
+    </data>
+  </define>
+  <define name="srepolicy">
+    <element name="policy" ns="http://libvirt.org/schemas/domain/sre/1.0">
+      <interleave>
+        <element name="ostype">
+          <choice>
+            <value>ELF</value>
+            <value>VxWorks</value>
+            <value>Linux</value>
+          </choice>
+        </element>
+        <element name="paging">
+          <choice>
+            <value>On</value>
+            <value>Off</value>
+            <value>Encrypt</value>
+          </choice>
+        </element>
+        <optional>
+          <element name="ph_domain_info">
+            <ref name="sreDomainHeaderInfo"/>
+          </element>
+          <element name="ph_domain_sha">
+            <ref name="sreDomainHeaderSHA"/>
+          </element>
+          <element name="ph_domain_sig">
+            <ref name="sreDomainHeaderSIG"/>
+          </element>
+        </optional>
+        <optional>
+          <element name="secure">
+            <choice>
+              <value>On</value>
+              <value>Off</value>
+            </choice>
+          </element>
+        </optional>
+        <optional>
+          <element name="domainSalt">
+            <ref name="sreDomainSalt"/>
+          </element>
+        </optional>
+        <element name="cacheWays">
+	  <data type="integer"/>
+        </element>
+        <element name="hashPageThreshold">
+          <ref name="scaledInteger"/>
+        </element>
+        <element name="dmaSize">
+          <ref name="scaledInteger"/>
+        </element>
+        <zeroOrMore>
+          <element name="devicePolicy">
+            <choice>
+              <group>
+                <ref name="sreactiontype"/>
+                <choice>
+                  <value>reset</value>
+                  <value>lpc</value>
+                  <value>hvc</value>
+                  <value>ppin</value>
+                </choice>
+              </group>
+              <group>
+                 <ref name="sredevassign"/>
+                 <choice>
+                   <value>event_reporter</value>
+                   <value>instrumentation_target</value>
+                   <value>instrumentation_reporter</value>
+                   <value>rtc</value>
+                 </choice>
+              </group>
+            </choice>
+          </element>
+        </zeroOrMore>
+        <zeroOrMore>
+          <element name="exception">
+            <ref name="sreactiontype"/>
+            <choice>
+              <value>de</value>
+              <value>of</value>
+              <value>br</value>
+              <value>ud</value>
+              <value>nm</value>
+              <value>df</value>
+              <value>np</value>
+              <value>ss</value>
+              <value>gp</value>
+              <value>pf</value>
+              <value>mf</value>
+              <value>ac</value>
+              <value>mc</value>
+              <value>xf</value>
+              <value>bp</value>
+            </choice>
+          </element>
+        </zeroOrMore>
+        <zeroOrMore>
+          <element name="featurePolicy">
+            <ref name="sreactiontype"/>
+            <choice>
+              <value>overhead_monitor</value>
+              <value>power_management</value>
+              <value>sw_debugger</value>
+              <value>tm</value>
+              <value>perfmon</value>
+            </choice>
+          </element>
+        </zeroOrMore>
+        <zeroOrMore>
+          <element name="console">
+            <ref name="sreactionserial"/>
+            <ref name="sreserial"/>
+            <optional>
+              <attribute name="port_id">
+                  <ref name="pChannelId"/>
+              </attribute>
+            </optional>
+          </element>
+        </zeroOrMore>
+        <zeroOrMore>
+          <element name="serial">
+            <ref name="sreactionserial"/>
+            <ref name="sreserial"/>
+            <optional>
+              <attribute name="port_id">
+                  <ref name="pChannelId"/>
+              </attribute>
+            </optional>
+          </element>
+        </zeroOrMore>
+        <zeroOrMore>
+          <element name="hostdev">
+            <attribute name="type">
+              <value>pci</value>
+            </attribute>
+              <ref name="startupPolicy"/>
+              <element name="address">
+                <ref name="pciaddress"/>
+              </element>
+              <element name="vendor">
+                <ref name="usbId"/>
+              </element>
+              <element name="device">
+                <ref name="usbId"/>
+              </element>
+              <element name="dmaBlocked">
+                <ref name="virYesNo"/>
+              </element>
+              <interleave>
+                <optional>
+                  <element name="class">
+                    <ref name="usbId"/>
+                  </element>
+                </optional>
+                <optional>
+                  <element name="function">
+                    <ref name="usbId"/>
+                  </element>
+                </optional>
+                <optional>
+                  <element name="instance">
+                    <ref name="usbId"/>
+                  </element>
+                </optional>
+                <optional>
+                  <element name="targetVendor">
+                    <ref name="usbId"/>
+                  </element>
+                </optional>
+	        <optional>
+                  <element name="targetDevice">
+                    <ref name="usbId"/>
+                  </element>
+                </optional>
+              </interleave>
+          </element> 
+        </zeroOrMore>
+        <zeroOrMore>
+          <element name="ioPort">
+	          <ref name="sreactiontype"/>
+            <ref name="usbId"/>
+          </element>
+        </zeroOrMore>
+        <zeroOrMore>
+          <element name="portal">
+              <attribute name="name">
+	        <ref name="deviceName"/>
+              </attribute>
+              <attribute name="channel">
+                <ref name="pChannelId"/>
+              </attribute>
+              <optional>
+                <attribute name="ifchannel">
+                  <ref name="pChannelId"/>
+                </attribute>
+              </optional>
+	      <ref name="scaledInteger"/>
+	  </element>
+        </zeroOrMore>	
+      </interleave>
+    </element>
+  </define>
   <!--
        Optional hypervisor extensions in their own namespace:
        LXC

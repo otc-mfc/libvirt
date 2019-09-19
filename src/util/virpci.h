@@ -92,6 +92,12 @@ struct _virPCIEDeviceInfo {
     virPCIELink *link_sta;   /* Actually negotiated capabilities */
 };
 
+virPCIDevicePtr
+virPCIDeviceNewQuiet(unsigned int domain,
+                unsigned int bus,
+                unsigned int slot,
+                unsigned int function);
+
 virPCIDevicePtr virPCIDeviceNew(unsigned int domain,
                                 unsigned int bus,
                                 unsigned int slot,
@@ -136,6 +142,7 @@ void virPCIDeviceSetReprobe(virPCIDevice *dev,
 
 
 virPCIDeviceListPtr virPCIDeviceListNew(void);
+virPCIDeviceListPtr virPCIDeviceCreateListScanHostPCI(void);
 int  virPCIDeviceListAdd(virPCIDeviceListPtr list,
                          virPCIDevicePtr dev);
 int virPCIDeviceListAddCopy(virPCIDeviceListPtr list, virPCIDevicePtr dev);

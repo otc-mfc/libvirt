@@ -92,6 +92,9 @@
 #ifdef WITH_BHYVE
 # include "bhyve/bhyve_driver.h"
 #endif
+#ifdef WITH_SRE
+# include "sre/sre_driver.h"
+#endif
 
 #define VIR_FROM_THIS VIR_FROM_NONE
 
@@ -830,6 +833,7 @@ virConnectCheckURIMissingSlash(const char *uristr, virURIPtr uri)
     /* To avoid false positives, only check drivers that mandate
        a path component in the URI, like /system or /session */
     if (STRNEQ(uri->scheme, "qemu") &&
+        STRNEQ(uri->scheme, "sre") &&
         STRNEQ(uri->scheme, "vbox") &&
         STRNEQ(uri->scheme, "vz"))
         return 0;

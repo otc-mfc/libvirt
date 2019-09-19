@@ -338,6 +338,10 @@ static int daemonInitialize(void)
     if (virDriverLoadModule("qemu", "qemuRegister", false) < 0)
         return -1;
 #endif
+#ifdef WITH_SRE
+    if (virDriverLoadModule("sre", "sreRegister", false) < 0)
+        return -1;
+#endif
 #ifdef WITH_LXC
     if (virDriverLoadModule("lxc", "lxcRegister", false) < 0)
         return -1;

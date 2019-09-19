@@ -1,0 +1,78 @@
+<domain type='sre' id='2' xmlns:sre='http://libvirt.org/schemas/domain/sre/1.0'>
+  <name>sretest</name>
+  <uuid>4e606bf5-75b1-4290-94ea-e0abb40831e1</uuid>
+  <title>Linux</title>
+  <description>Domain used to run Linux Test Project on the given Linux kernel.</description>
+  <metadata/>
+  <memory unit='KiB'>8388608</memory>
+  <currentMemory unit='KiB'>8388608</currentMemory>
+  <vcpu>8</vcpu>
+  <os>
+    <type arch='x86_64'>hvm</type>
+    <kernel>/mnt/oagwy/kernel_for_manifest/vmlinuz-3.10.0-862.14.4.el7.x86_64</kernel>
+    <initrd>/mnt/oagwy/kernel_for_manifest/initramfs-3.10.0-862.14.4.el7.x86_64.img</initrd>
+    <cmdline>root={ROOT_FS} ro crashkernel=auto LANG=en_US.UTF-8 rw console=ttyS0,115200n8</cmdline>
+    <boot dev='hd'/>
+  </os>
+  <features>
+    <apic/>
+    <pae/>
+    <pmu state='off'/>
+  </features>
+  <cpu mode='host-model'>
+    <model fallback='allow'/>
+  </cpu>
+  <clock offset='utc'/>
+  <on_poweroff>destroy</on_poweroff>
+  <on_reboot>restart</on_reboot>
+  <on_crash>destroy</on_crash>
+  <devices>
+    <serial type='dev'>
+      <source path='com1'/>
+      <target port='0'/>
+    </serial>
+    <serial type='null'>
+      <target port='1'/>
+    </serial>
+    <serial type='null'>
+      <target port='2'/>
+    </serial>
+    <serial type='null'>
+      <target port='3'/>
+    </serial>
+    <hostdev mode='subsystem' type='pci' managed='yes'>
+      <source>
+        <address domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
+      </source>
+    </hostdev>
+    <iommu model='intel'>
+      <driver intremap='off'/>
+    </iommu>
+  </devices>
+  <sre:policy>
+    <sre:ostype>Linux</sre:ostype>
+    <sre:paging>Off</sre:paging>
+    <sre:secure>On</sre:secure>
+    <sre:cacheWays>1</sre:cacheWays>
+    <sre:dmaSize unit='MiB'>1</sre:dmaSize>
+    <sre:hashPageThreshold unit='KiB'>1</sre:hashPageThreshold>
+    <sre:devicePolicy action='allow'>reset</sre:devicePolicy>
+    <sre:devicePolicy action='unassigned'>event_reporter</sre:devicePolicy>
+    <sre:devicePolicy action='allow_null'>ppin</sre:devicePolicy>
+    <sre:featurePolicy action='allow'>sw_debugger</sre:featurePolicy>
+    <sre:exception action='allow'>pf</sre:exception>
+    <sre:exception action='allow'>gp</sre:exception>
+    <sre:exception action='allow'>bp</sre:exception>
+    <sre:exception action='allow'>ud</sre:exception>
+    <sre:hostdev type='pci' startupPolicy='optional'>
+      <sre:address domain='0x0000' bus='0x00' slot='0x01' function='0x0'/>
+      <sre:vendor>0x8086</sre:vendor>
+      <sre:device>0x6F50</sre:device>
+      <sre:dmaBlocked>no</sre:dmaBlocked>
+    </sre:hostdev>
+    <sre:serial action='allow_shared' >0</sre:serial>
+    <sre:serial action='allow_null' >1</sre:serial>
+    <sre:serial action='allow_null' >2</sre:serial>
+    <sre:serial action='allow_null' >3</sre:serial>
+  </sre:policy>
+</domain>
